@@ -8,10 +8,14 @@
 //! official `toml-test` suite.
 
 mod lexer;
+mod literal;
+mod parser;
 mod token;
+mod tree;
 
 pub use lexer::lex;
 pub use token::{Token, TokenKind};
+pub use tree::{Element, Node, NodeKind};
 
 use kosmetic_diagnostics::Diagnostic;
 
@@ -20,19 +24,20 @@ use kosmetic_diagnostics::Diagnostic;
 pub struct Parse {
     /// Every token of the file, trivia included, ending with [`TokenKind::Eof`].
     pub tokens: Vec<Token>,
+    /// The lossless tree. Its leaves, in order, are exactly [`Parse::tokens`].
+    pub tree: Node,
     /// Syntax errors found while lexing and parsing.
     pub diagnostics: Vec<Diagnostic>,
 }
 
-/// Parses a TOML document.
-///
-/// TODO(M1): build the lossless tree (tables, array of tables, key/value
-/// pairs, inline tables, arrays) with error recovery, so a single typo does
-/// not hide every other error in the file.
+/// Parses a TOML document. A single typo does not hide the other errors:
+/// the parser recovers at the end of the line and goes on.
 pub fn parse(source: &str) -> Parse {
-    let (tokens, diagnostics) = lex(source);
+    let (tokens, mut diagnostics) = lex(source);
+    let tree = parser::parse(source, &tokens, &mut diagnostics);
     Parse {
         tokens,
+        tree,
         diagnostics,
     }
 }
