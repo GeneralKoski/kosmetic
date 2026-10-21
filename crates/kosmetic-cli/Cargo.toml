@@ -1,0 +1,22 @@
+[package]
+name = "kosmetic-cli"
+description = "A fast, hand-written TOML linter"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "kosmetic"
+path = "src/main.rs"
+
+[dependencies]
+kosmetic-diagnostics.workspace = true
+kosmetic-syntax.workspace = true
+kosmetic-rules.workspace = true
+clap.workspace = true
+
+[lints]
+workspace = true

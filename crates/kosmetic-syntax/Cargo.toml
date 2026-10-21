@@ -1,0 +1,17 @@
+[package]
+name = "kosmetic-syntax"
+description = "Hand-written TOML lexer and lossless parser for kosmetic"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+# No TOML or parser-combinator crates here on purpose: the lexer and the parser
+# are written by hand. See CLAUDE.md.
+[dependencies]
+kosmetic-diagnostics.workspace = true
+
+[lints]
+workspace = true
