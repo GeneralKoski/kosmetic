@@ -11,8 +11,8 @@ Cargo.toml:2:18: warning[style/no-trailing-whitespace]: trailing whitespace
 ```
 
 > Status: early development. The lexer, the lossless parser and the value
-> model pass the `toml-test` suite, diagnostics show labels and colors
-> (M1, M2); configuration and rules come next.
+> model pass the `toml-test` suite, diagnostics show labels and colors, and
+> nine configurable rules run (M1-M3); `--fix` and the formatter come next.
 
 ## Why
 
@@ -36,7 +36,40 @@ kosmetic rules                             # list available rules
 ```
 
 Exit codes: `0` no errors, `1` at least one error, `2` the run failed
-(unreadable file, bad arguments).
+(unreadable file, bad arguments, invalid configuration).
+
+## Configuration
+
+kosmetic reads the nearest `.kosmetic.toml` in the working directory or its
+parents, or the file given with `--config`. Each rule can be set to `off`,
+`warn` or `error`:
+
+```toml
+[rules]
+"style/sorted-keys" = "warn"
+"style/comment-space" = "off"
+```
+
+The file is parsed by kosmetic itself: a typo in a rule name is reported
+with its position and stops the run.
+
+## Rules
+
+| Rule | Default | Fix |
+| --- | --- | --- |
+| `style/no-trailing-whitespace` | warn | yes |
+| `style/final-newline` | warn | yes |
+| `style/no-multiple-blank-lines` | warn | yes |
+| `style/consistent-line-endings` | warn | yes |
+| `style/spaces-around-equals` | warn | yes |
+| `style/comment-space` | warn | yes |
+| `style/prefer-bare-keys` | warn | yes |
+| `style/sorted-keys` | off | no |
+| `semantic/mixed-array-types` | warn | no |
+
+Syntax errors (`syntax/...`) and semantic errors (`semantic/duplicate-key`,
+`semantic/table-redefined`, `semantic/integer-overflow`,
+`semantic/invalid-datetime`) are always errors and cannot be turned off.
 
 ## Architecture
 
@@ -56,7 +89,7 @@ source ─▶ lexer ─▶ tokens ─▶ parser ─▶ lossless tree ─▶ sema
 
 - [x] **M1** Lexer and lossless parser passing the `toml-test` valid and invalid suites
 - [x] **M2** Error recovery and rich diagnostics (multi-line spans, secondary labels, colors)
-- [ ] **M3** Semantic checks (duplicate keys, redefined tables), `.kosmetic.toml` config, 8-10 rules
+- [x] **M3** Semantic checks (duplicate keys, redefined tables), `.kosmetic.toml` config, 8-10 rules
 - [ ] **M4** `--fix` and a formatter built on the lossless tree
 - [ ] **M5** Schema rules for `Cargo.toml` and `pyproject.toml`
 - [ ] **M6** Language server and VS Code extension (optional)
