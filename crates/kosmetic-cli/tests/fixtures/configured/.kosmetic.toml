@@ -1,0 +1,3 @@
+[rules]
+"style/no-trailing-whitespace" = "off"
+"style/sorted-keys" = "error"

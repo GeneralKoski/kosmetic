@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand, ValueEnum};
-use kosmetic_diagnostics::{Severity, render_human, render_json};
+use kosmetic_diagnostics::{Diagnostic, Severity, render_human, render_json};
 use kosmetic_rules::{Config, all_rules};
 
 #[derive(Parser)]
@@ -31,6 +31,10 @@ enum Command {
         /// When to color human output. `auto` colors a terminal unless `NO_COLOR` is set.
         #[arg(long, value_enum, default_value_t = Color::Auto)]
         color: Color,
+        /// Configuration file. Default: the nearest `.kosmetic.toml` in the
+        /// current directory or one of its parents.
+        #[arg(long)]
+        config: Option<PathBuf>,
     },
     /// List every available rule.
     Rules,
@@ -65,7 +69,14 @@ fn main() -> ExitCode {
             paths,
             format,
             color,
-        } => check(&paths, format, color.enabled()),
+            config,
+        } => {
+            let color = color.enabled();
+            match load_config(config, format, color) {
+                Ok(config) => check(&paths, &config, format, color),
+                Err(code) => code,
+            }
+        }
         Command::Rules => {
             for rule in all_rules() {
                 let meta = rule.meta();
@@ -76,9 +87,50 @@ fn main() -> ExitCode {
     }
 }
 
-fn check(paths: &[PathBuf], format: Format, color: bool) -> ExitCode {
-    // TODO(M3): discover and load `.kosmetic.toml`.
-    let config = Config::default();
+/// Loads the configuration. A file with errors stops the run with exit code
+/// 2, after printing its diagnostics like those of any other file.
+fn load_config(path: Option<PathBuf>, format: Format, color: bool) -> Result<Config, ExitCode> {
+    let path = path.or_else(|| {
+        let cwd = std::env::current_dir().ok()?;
+        cwd.ancestors()
+            .map(|dir| dir.join(".kosmetic.toml"))
+            .find(|candidate| candidate.is_file())
+    });
+    let Some(path) = path else {
+        return Ok(Config::default());
+    };
+    let source = std::fs::read_to_string(&path).map_err(|err| {
+        eprintln!("kosmetic: cannot read {}: {err}", path.display());
+        ExitCode::from(2)
+    })?;
+    let (config, diagnostics) = Config::from_toml(&source);
+    if diagnostics.is_empty() {
+        return Ok(config);
+    }
+    print_diagnostics(
+        &path.display().to_string(),
+        &source,
+        &diagnostics,
+        format,
+        color,
+    );
+    Err(ExitCode::from(2))
+}
+
+fn print_diagnostics(
+    name: &str,
+    source: &str,
+    diagnostics: &[Diagnostic],
+    format: Format,
+    color: bool,
+) {
+    match format {
+        Format::Human => print!("{}", render_human(name, source, diagnostics, color)),
+        Format::Json => println!("{}", render_json(name, source, diagnostics)),
+    }
+}
+
+fn check(paths: &[PathBuf], config: &Config, format: Format, color: bool) -> ExitCode {
     let mut has_errors = false;
 
     for path in paths {
@@ -93,22 +145,20 @@ fn check(paths: &[PathBuf], format: Format, color: bool) -> ExitCode {
         let parse = kosmetic_syntax::parse(&source);
         let mut diagnostics = parse.diagnostics.clone();
         diagnostics.extend(kosmetic_syntax::build_model(&source, &parse.tree).1);
-        diagnostics.extend(kosmetic_rules::run(&source, &parse, &config));
+        diagnostics.extend(kosmetic_rules::run(&source, &parse, config));
         diagnostics.sort_by_key(|diagnostic| diagnostic.span);
 
         has_errors |= diagnostics
             .iter()
             .any(|diagnostic| diagnostic.severity == Severity::Error);
 
-        let name = path.display().to_string();
-        let rendered = match format {
-            Format::Human => render_human(&name, &source, &diagnostics, color),
-            Format::Json => render_json(&name, &source, &diagnostics),
-        };
-        print!("{rendered}");
-        if matches!(format, Format::Json) {
-            println!();
-        }
+        print_diagnostics(
+            &path.display().to_string(),
+            &source,
+            &diagnostics,
+            format,
+            color,
+        );
     }
 
     if has_errors {

@@ -57,3 +57,34 @@ fn color_can_be_forced() {
     let output = kosmetic(&["check", "--color", "always", "invalid.toml"]);
     assert!(String::from_utf8_lossy(&output.stdout).contains("\x1b[1;31merror["));
 }
+
+#[test]
+fn config_is_discovered_from_the_working_directory() {
+    let output = Command::new(env!("CARGO_BIN_EXE_kosmetic"))
+        .args(["check", "--color", "never", "unsorted.toml"])
+        .current_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/configured"))
+        .output()
+        .expect("failed to run kosmetic");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(output.status.code(), Some(1), "{stdout}");
+    assert!(stdout.contains("error[style/sorted-keys]"));
+    assert!(!stdout.contains("no-trailing-whitespace"));
+}
+
+#[test]
+fn invalid_config_stops_the_run() {
+    let output = kosmetic(&[
+        "check",
+        "--color",
+        "never",
+        "--config",
+        "bad-config.toml",
+        "clean.toml",
+    ]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(
+        stdout
+            .contains("bad-config.toml:2:1: error[schema/unknown-key]: unknown rule `style/nope`")
+    );
+}
