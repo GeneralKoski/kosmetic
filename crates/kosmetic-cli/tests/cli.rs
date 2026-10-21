@@ -15,7 +15,7 @@ fn kosmetic(args: &[&str]) -> std::process::Output {
 fn clean_file_passes() {
     let output = kosmetic(&["check", "clean.toml"]);
     assert!(output.status.success());
-    assert!(output.stdout.is_empty());
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "");
 }
 
 #[test]

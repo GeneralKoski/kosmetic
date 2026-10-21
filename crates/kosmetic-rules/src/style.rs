@@ -69,7 +69,7 @@ mod tests {
 
     #[test]
     fn ignores_clean_lines_and_crlf() {
-        assert!(check("a = 1\r\nb = 2\n").is_empty());
+        assert_eq!(check("a = 1\r\nb = 2\n"), Vec::new());
     }
 
     #[test]
@@ -80,6 +80,6 @@ mod tests {
             .insert("style/no-trailing-whitespace".to_owned(), crate::Level::Off);
         let source = "a = 1  \n";
         let parse = kosmetic_syntax::parse(source);
-        assert!(run(source, &parse, &config).is_empty());
+        assert_eq!(run(source, &parse, &config), Vec::new());
     }
 }
