@@ -84,17 +84,80 @@ impl Parser<'_> {
         }
     }
 
-    fn error(&mut self, code: &'static str, message: impl Into<String>, span: Span) {
+    fn error(
+        &mut self,
+        code: &'static str,
+        message: impl Into<String>,
+        span: Span,
+    ) -> &mut Diagnostic {
         self.diagnostics
             .push(Diagnostic::new(code, Severity::Error, message, span));
+        self.diagnostics.last_mut().expect("just pushed")
     }
 
     /// Reports an error on the current token, unless the lexer already
     /// reported it as an [`TokenKind::Error`] token.
-    fn error_here(&mut self, code: &'static str, message: impl Into<String>) {
-        if self.peek() != TokenKind::Error {
-            let span = self.current().span;
-            self.error(code, message, span);
+    fn error_here(
+        &mut self,
+        code: &'static str,
+        message: impl Into<String>,
+    ) -> Option<&mut Diagnostic> {
+        if self.peek() == TokenKind::Error {
+            return None;
+        }
+        let span = self.current().span;
+        Some(self.error(code, message, span))
+    }
+
+    /// Whether only whitespace separates the cursor from the previous newline.
+    fn at_line_start(&self) -> bool {
+        self.tokens[..self.pos.min(self.tokens.len())]
+            .iter()
+            .rev()
+            .find(|token| token.kind != TokenKind::Whitespace)
+            .is_none_or(|token| token.kind == TokenKind::Newline)
+    }
+
+    /// Whether the tokens ahead read `key =`. An `=` can never appear in an
+    /// array, so inside one this means its `]` is missing.
+    fn at_key_value(&self) -> bool {
+        let mut seen_key = false;
+        for n in 0.. {
+            match self.nth(n) {
+                TokenKind::Bare | TokenKind::BasicString | TokenKind::LiteralString => {
+                    seen_key = true;
+                }
+                TokenKind::Dot | TokenKind::Whitespace => {}
+                TokenKind::Equals => return seen_key,
+                _ => return false,
+            }
+        }
+        false
+    }
+
+    /// Whether a line starts with `[key]` or `[[key]]` where the key cannot
+    /// be read as a value, which inside an array means its `]` is missing.
+    fn at_header(&self) -> bool {
+        if !self.at_line_start() || self.peek() != TokenKind::LBracket {
+            return false;
+        }
+        let mut n = 1;
+        if self.nth(n) == TokenKind::LBracket {
+            n += 1;
+        }
+        let mut not_a_value = false;
+        loop {
+            match self.nth(n) {
+                TokenKind::Bare => {
+                    let token = self.tokens[self.pos + n];
+                    not_a_value |= classify(self.text(token)) == NodeKind::Error;
+                }
+                TokenKind::Dot => not_a_value = true,
+                TokenKind::BasicString | TokenKind::LiteralString | TokenKind::Whitespace => {}
+                TokenKind::RBracket => return not_a_value,
+                _ => return false,
+            }
+            n += 1;
         }
     }
 
@@ -157,14 +220,23 @@ impl Parser<'_> {
     }
 
     /// After a header or a key/value pair only whitespace and a comment may
-    /// follow on the same line.
+    /// follow on the same line. An unclosed array may already have consumed
+    /// the newline, in which case there is nothing left to check.
     fn line_end(&mut self, out: &mut Vec<Element>) {
+        if self.at_line_start() {
+            return;
+        }
         self.eat_whitespace(out);
         if self.peek() == TokenKind::Comment {
             self.bump(out);
         }
         if !matches!(self.peek(), TokenKind::Newline | TokenKind::Eof) {
-            self.error_here("syntax/expected-newline", "expected a newline");
+            if let Some(diagnostic) =
+                self.error_here("syntax/expected-newline", "expected a newline")
+            {
+                diagnostic.help =
+                    Some("put each key/value pair and table header on its own line".to_owned());
+            }
             self.recover(out);
         }
     }
@@ -195,9 +267,11 @@ impl Parser<'_> {
             }
         } else {
             let close = if array { "]]" } else { "]" };
+            let at = self.current().span;
             self.unclosed(
                 &format!("expected `{close}` to close the table header"),
                 open,
+                at,
             );
             self.recover(&mut children);
         }
@@ -215,18 +289,25 @@ impl Parser<'_> {
         }
     }
 
-    fn unclosed(&mut self, message: &str, open: Span) {
-        if self.peek() == TokenKind::Error {
+    /// Reports a missing closing bracket at `at`, unless the lexer already
+    /// reported the token there.
+    fn unclosed(&mut self, message: &str, open: Span, at: Span) {
+        if self.peek() == TokenKind::Error && at == self.current().span {
             return;
         }
-        let diagnostic = Diagnostic::new(
-            "syntax/unclosed-delimiter",
-            Severity::Error,
-            message,
-            self.current().span,
-        )
-        .with_label(open, "opened here");
+        let diagnostic = Diagnostic::new("syntax/unclosed-delimiter", Severity::Error, message, at)
+            .with_label(open, "opened here");
         self.diagnostics.push(diagnostic);
+    }
+
+    /// Empty span right after the last non-trivia child, where a missing
+    /// closing bracket belongs.
+    fn after_last(children: &[Element]) -> Span {
+        let last = children
+            .iter()
+            .rev()
+            .find(|child| !matches!(child, Element::Token(token) if token.kind.is_trivia()));
+        Span::empty(last.map_or(0, |child| child.span().end))
     }
 
     fn key(&mut self) -> Node {
@@ -235,12 +316,15 @@ impl Parser<'_> {
             match self.peek() {
                 TokenKind::Bare => {
                     let token = self.current();
-                    if self.text(token).contains(['+', ':']) {
+                    let text = self.text(token);
+                    if text.contains(['+', ':']) {
+                        let help = format!("quote the key: \"{text}\"");
                         self.error(
                             "syntax/invalid-key",
                             "bare keys may only contain letters, digits, `_` and `-`",
                             token.span,
-                        );
+                        )
+                        .help = Some(help);
                     }
                     self.bump(&mut children);
                 }
@@ -275,7 +359,11 @@ impl Parser<'_> {
             self.bump(&mut children);
         } else {
             if has_key {
-                self.error_here("syntax/expected-equals", "expected `=` after the key");
+                if let Some(diagnostic) =
+                    self.error_here("syntax/expected-equals", "expected `=` after the key")
+                {
+                    diagnostic.help = Some("a key must be followed by `=` and a value".to_owned());
+                }
             }
             self.recover(&mut children);
             return self.finish(NodeKind::KeyValue, children);
@@ -341,8 +429,11 @@ impl Parser<'_> {
         let kind = classify(text);
         if kind == NodeKind::Error {
             let message = format!("invalid value `{text}`");
+            let help = text
+                .starts_with(|c: char| c.is_ascii_alphabetic())
+                .then(|| format!("strings must be quoted: \"{text}\""));
             let node = self.finish(kind, children);
-            self.error("syntax/invalid-value", message, node.span);
+            self.error("syntax/invalid-value", message, node.span).help = help;
             return node;
         }
         self.finish(kind, children)
@@ -372,6 +463,7 @@ impl Parser<'_> {
                     break;
                 }
                 TokenKind::Eof => break,
+                _ if self.at_key_value() || self.at_header() => break,
                 TokenKind::Comma if need_comma => {
                     self.bump(&mut children);
                     need_comma = false;
@@ -400,7 +492,8 @@ impl Parser<'_> {
         }
         self.closers.pop();
         if !closed {
-            self.unclosed("expected `]` to close the array", open);
+            let at = Self::after_last(&children);
+            self.unclosed("expected `]` to close the array", open, at);
         }
         self.finish(NodeKind::Array, children)
     }
@@ -430,7 +523,8 @@ impl Parser<'_> {
                             "syntax/trailing-comma",
                             "trailing commas are not allowed in inline tables",
                             comma,
-                        );
+                        )
+                        .help = Some("remove the comma, TOML 1.0 does not allow it".to_owned());
                         self.bump(&mut children);
                         closed = true;
                     }
@@ -450,9 +544,11 @@ impl Parser<'_> {
         }
         self.closers.pop();
         if !closed {
+            let at = Self::after_last(&children);
             self.unclosed(
                 "expected `}` to close the inline table, which must fit on one line",
                 open,
+                at,
             );
         }
         self.finish(NodeKind::InlineTable, children)
@@ -470,6 +566,8 @@ mod tests {
     use std::fmt::Write as _;
 
     use proptest::prelude::*;
+
+    use kosmetic_diagnostics::Span;
 
     use crate::{Element, Node, Token, TokenKind, lex, parse};
 
@@ -656,6 +754,30 @@ mod tests {
         let source = format!("a = {}", "[{a=".repeat(100_000));
         assert!(codes(&source).contains(&"syntax/nesting-too-deep"));
         assert_lossless(&source);
+    }
+
+    #[test]
+    fn unclosed_arrays_stop_before_the_next_entry() {
+        let source = "a = [1, 2\nb = 3\nc = [\n  \"x\",\n[tool]\nd = 4\n";
+        let parse = parse(source);
+        let codes: Vec<_> = parse.diagnostics.iter().map(|d| (d.code, d.span)).collect();
+        assert_eq!(
+            codes,
+            vec![
+                ("syntax/unclosed-delimiter", Span::empty(9)),
+                ("syntax/unclosed-delimiter", Span::empty(28)),
+            ]
+        );
+        let tree = outline(source);
+        assert!(tree.contains("Bare \"b\""));
+        assert!(tree.contains("TableHeader"));
+        assert!(tree.contains("Bare \"d\""));
+        assert_lossless(source);
+    }
+
+    #[test]
+    fn nested_arrays_on_their_own_line_are_not_headers() {
+        assert_eq!(codes("a = [\n[1],\n[\"x\"],\n]"), Vec::<&str>::new());
     }
 
     #[test]
