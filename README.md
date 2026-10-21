@@ -10,8 +10,8 @@ Cargo.toml:2:18: warning[style/no-trailing-whitespace]: trailing whitespace
   = help: remove the spaces at the end of the line
 ```
 
-> Status: early development. The rule engine, diagnostics and CLI work; the
-> lexer and parser are being written (milestone M1).
+> Status: early development. The lexer, the lossless parser and the value
+> model pass the `toml-test` suite (milestone M1); rules come next.
 
 ## Why
 
@@ -45,13 +45,14 @@ source ─▶ lexer ─▶ tokens ─▶ parser ─▶ lossless tree ─▶ sema
 | Crate | Role |
 | --- | --- |
 | `kosmetic-diagnostics` | Spans, line index, diagnostics, human and JSON rendering |
-| `kosmetic-syntax` | Lexer, tokens, lossless parser |
+| `kosmetic-syntax` | Lexer, tokens, lossless parser, value model and semantic checks |
 | `kosmetic-rules` | `Rule` trait, rule engine, configuration, built-in rules |
 | `kosmetic-cli` | The `kosmetic` binary |
+| `kosmetic-toml-test` | Decoder adapter for the `toml-test` suite (not published) |
 
 ## Roadmap
 
-- [ ] **M1** Lexer and lossless parser passing the `toml-test` valid and invalid suites
+- [x] **M1** Lexer and lossless parser passing the `toml-test` valid and invalid suites
 - [ ] **M2** Error recovery and rich diagnostics (multi-line spans, secondary labels, colors)
 - [ ] **M3** Semantic checks (duplicate keys, redefined tables), `.kosmetic.toml` config, 8-10 rules
 - [ ] **M4** `--fix` and a formatter built on the lossless tree
@@ -64,7 +65,11 @@ source ─▶ lexer ─▶ tokens ─▶ parser ─▶ lossless tree ─▶ sema
 cargo test
 cargo clippy --all-targets -- -D warnings
 cargo fmt --all
+scripts/toml-test.sh   # official toml-test suite, needs Go
 ```
+
+`toml-test` is a git submodule pinned to a release: clone with
+`--recurse-submodules` or run `git submodule update --init`.
 
 ## License
 
