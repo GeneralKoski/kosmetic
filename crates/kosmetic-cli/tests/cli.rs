@@ -41,3 +41,19 @@ fn missing_file_exits_with_2() {
     let output = kosmetic(&["check", "does-not-exist.toml"]);
     assert_eq!(output.status.code(), Some(2));
 }
+
+#[test]
+fn errors_fail_the_run_and_show_labels() {
+    let output = kosmetic(&["check", "--color", "never", "invalid.toml"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(stdout.contains("invalid.toml:2:16: error[syntax/unclosed-delimiter]"));
+    assert!(stdout.contains("invalid.toml:3:1: error[semantic/duplicate-key]"));
+    assert!(stdout.contains("| ---- first defined here"));
+}
+
+#[test]
+fn color_can_be_forced() {
+    let output = kosmetic(&["check", "--color", "always", "invalid.toml"]);
+    assert!(String::from_utf8_lossy(&output.stdout).contains("\x1b[1;31merror["));
+}
