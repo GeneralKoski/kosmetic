@@ -3,6 +3,7 @@
 //! Exit codes: 0 no errors, 1 at least one error-level diagnostic,
 //! 2 the run itself failed (unreadable file, bad arguments).
 
+use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -27,6 +28,9 @@ enum Command {
         /// Output format.
         #[arg(long, value_enum, default_value_t = Format::Human)]
         format: Format,
+        /// When to color human output. `auto` colors a terminal unless `NO_COLOR` is set.
+        #[arg(long, value_enum, default_value_t = Color::Auto)]
+        color: Color,
     },
     /// List every available rule.
     Rules,
@@ -38,9 +42,30 @@ enum Format {
     Json,
 }
 
+#[derive(Clone, Copy, ValueEnum)]
+enum Color {
+    Auto,
+    Always,
+    Never,
+}
+
+impl Color {
+    fn enabled(self) -> bool {
+        match self {
+            Self::Auto => std::io::stdout().is_terminal() && std::env::var_os("NO_COLOR").is_none(),
+            Self::Always => true,
+            Self::Never => false,
+        }
+    }
+}
+
 fn main() -> ExitCode {
     match Cli::parse().command {
-        Command::Check { paths, format } => check(&paths, format),
+        Command::Check {
+            paths,
+            format,
+            color,
+        } => check(&paths, format, color.enabled()),
         Command::Rules => {
             for rule in all_rules() {
                 let meta = rule.meta();
@@ -51,7 +76,7 @@ fn main() -> ExitCode {
     }
 }
 
-fn check(paths: &[PathBuf], format: Format) -> ExitCode {
+fn check(paths: &[PathBuf], format: Format, color: bool) -> ExitCode {
     // TODO(M3): discover and load `.kosmetic.toml`.
     let config = Config::default();
     let mut has_errors = false;
@@ -77,7 +102,7 @@ fn check(paths: &[PathBuf], format: Format) -> ExitCode {
 
         let name = path.display().to_string();
         let rendered = match format {
-            Format::Human => render_human(&name, &source, &diagnostics),
+            Format::Human => render_human(&name, &source, &diagnostics, color),
             Format::Json => render_json(&name, &source, &diagnostics),
         };
         print!("{rendered}");
