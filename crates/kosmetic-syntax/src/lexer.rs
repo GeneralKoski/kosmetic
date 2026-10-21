@@ -245,7 +245,7 @@ impl Lexer<'_> {
                 let run = self.quote_run(quote);
                 if run >= 3 {
                     // Up to two quotes right before the closing `"""` belong to the content.
-                    for _ in 0..run.min(5) {
+                    for _ in 0..run {
                         self.cursor.bump();
                     }
                     return kind;
@@ -275,6 +275,7 @@ impl Lexer<'_> {
     fn quote_run(&self, quote: u8) -> usize {
         self.cursor.bytes[self.cursor.pos..]
             .iter()
+            .take(5)
             .take_while(|&&b| b == quote)
             .count()
     }
