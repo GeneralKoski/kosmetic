@@ -1,7 +1,7 @@
 //! Shape checks for bare values. They only look at the grammar: ranges
 //! (integer overflow, February 30) are checked by the value model.
 
-use crate::NodeKind;
+use crate::{NodeKind, TokenKind};
 
 /// Classifies the text of a bare value, or returns [`NodeKind::Error`].
 pub(crate) fn classify(text: &str) -> NodeKind {
@@ -61,10 +61,14 @@ fn is_float(text: &str) -> bool {
 
 /// The four TOML date-time types.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum DateTimeKind {
+pub enum DateTimeKind {
+    /// `1979-05-27T07:32:00Z`, `1979-05-27T07:32:00-07:00`
     Offset,
+    /// `1979-05-27T07:32:00`
     Local,
+    /// `1979-05-27`
     Date,
+    /// `07:32:00`
     Time,
 }
 
@@ -126,10 +130,102 @@ pub(crate) fn datetime_kind(text: &str) -> Option<DateTimeKind> {
     is_time(local).then_some(DateTimeKind::Offset)
 }
 
+/// Decoded content of a string token: quotes removed, escapes resolved, and
+/// the newline right after a multi-line opener trimmed. Other tokens are
+/// returned as they are, which is what bare keys need. Never fails: invalid
+/// escapes were already reported by the lexer and are kept verbatim.
+pub(crate) fn string_value(kind: TokenKind, text: &str) -> String {
+    let (quote, multiline, basic) = match kind {
+        TokenKind::BasicString => ("\"", false, true),
+        TokenKind::MultilineBasicString => ("\"\"\"", true, true),
+        TokenKind::LiteralString => ("'", false, false),
+        TokenKind::MultilineLiteralString => ("'''", true, false),
+        _ => return text.to_owned(),
+    };
+    let body = text.strip_prefix(quote).unwrap_or(text);
+    let body = body.strip_suffix(quote).unwrap_or(body);
+    let body = if multiline {
+        body.strip_prefix("\r\n")
+            .or_else(|| body.strip_prefix('\n'))
+            .unwrap_or(body)
+    } else {
+        body
+    };
+    if basic {
+        unescape(body)
+    } else {
+        body.to_owned()
+    }
+}
+
+fn unescape(body: &str) -> String {
+    let mut out = String::with_capacity(body.len());
+    let mut chars = body.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('b') => out.push('\u{8}'),
+            Some('t') => out.push('\t'),
+            Some('n') => out.push('\n'),
+            Some('f') => out.push('\u{c}'),
+            Some('r') => out.push('\r'),
+            Some('"') => out.push('"'),
+            Some('\\') | None => out.push('\\'),
+            Some(u @ ('u' | 'U')) => {
+                let len = if u == 'u' { 4 } else { 8 };
+                let hex: String = chars.by_ref().take(len).collect();
+                if let Some(ch) = u32::from_str_radix(&hex, 16).ok().and_then(char::from_u32) {
+                    out.push(ch);
+                }
+            }
+            // Line ending backslash: drop the whitespace and newlines that follow.
+            Some(' ' | '\t' | '\n' | '\r') => {
+                while chars
+                    .next_if(|c| matches!(c, ' ' | '\t' | '\n' | '\r'))
+                    .is_some()
+                {}
+            }
+            Some(other) => {
+                out.push('\\');
+                out.push(other);
+            }
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{DateTimeKind, classify, datetime_kind};
+    use super::{DateTimeKind, classify, datetime_kind, string_value};
     use crate::NodeKind::*;
+    use crate::TokenKind;
+
+    #[test]
+    fn decodes_strings() {
+        let cases = [
+            (
+                TokenKind::BasicString,
+                r#""a\tb\u00e9\U0001F600\"""#,
+                "a\tbé😀\"",
+            ),
+            (TokenKind::LiteralString, r"'C:\path'", r"C:\path"),
+            (
+                TokenKind::MultilineBasicString,
+                "\"\"\"\nab \\\n   c\"\"\"\"\"",
+                "ab c\"\"",
+            ),
+            (TokenKind::MultilineLiteralString, "'''\r\nx\n'''", "x\n"),
+            (TokenKind::BasicString, "\"unterminated", "unterminated"),
+            (TokenKind::BasicString, r#""\x""#, r"\x"),
+            (TokenKind::Bare, "key", "key"),
+        ];
+        for (kind, text, expected) in cases {
+            assert_eq!(string_value(kind, text), expected, "{text:?}");
+        }
+    }
 
     #[test]
     fn classifies_values() {

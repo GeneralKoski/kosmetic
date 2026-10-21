@@ -9,11 +9,14 @@
 
 mod lexer;
 mod literal;
+mod model;
 mod parser;
 mod token;
 mod tree;
 
 pub use lexer::lex;
+pub use literal::DateTimeKind;
+pub use model::{DateTime, Table, TableOrigin, Value, build_model};
 pub use token::{Token, TokenKind};
 pub use tree::{Element, Node, NodeKind};
 

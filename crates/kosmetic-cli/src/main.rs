@@ -67,6 +67,7 @@ fn check(paths: &[PathBuf], format: Format) -> ExitCode {
 
         let parse = kosmetic_syntax::parse(&source);
         let mut diagnostics = parse.diagnostics.clone();
+        diagnostics.extend(kosmetic_syntax::build_model(&source, &parse.tree).1);
         diagnostics.extend(kosmetic_rules::run(&source, &parse, &config));
         diagnostics.sort_by_key(|diagnostic| diagnostic.span);
 
