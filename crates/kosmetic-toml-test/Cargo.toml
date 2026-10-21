@@ -1,0 +1,17 @@
+[package]
+name = "kosmetic-toml-test"
+description = "Decoder adapter that runs kosmetic against the toml-test suite"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+kosmetic-syntax.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

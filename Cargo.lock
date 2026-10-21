@@ -181,6 +181,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "kosmetic-toml-test"
+version = "0.1.0"
+dependencies = [
+ "kosmetic-syntax",
+ "serde_json",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.191"
 source = "registry+https://github.com/rust-lang/crates.io-index"
