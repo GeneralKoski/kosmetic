@@ -11,7 +11,8 @@ Cargo.toml:2:18: warning[style/no-trailing-whitespace]: trailing whitespace
 ```
 
 > Status: early development. The lexer, the lossless parser and the value
-> model pass the `toml-test` suite (milestone M1); rules come next.
+> model pass the `toml-test` suite, diagnostics show labels and colors
+> (M1, M2); configuration and rules come next.
 
 ## Why
 
@@ -30,6 +31,7 @@ cargo install --path crates/kosmetic-cli
 
 kosmetic check Cargo.toml pyproject.toml
 kosmetic check --format json config.toml   # for CI and editors
+kosmetic check --color never Cargo.toml    # auto (default), always, never
 kosmetic rules                             # list available rules
 ```
 
@@ -53,7 +55,7 @@ source ─▶ lexer ─▶ tokens ─▶ parser ─▶ lossless tree ─▶ sema
 ## Roadmap
 
 - [x] **M1** Lexer and lossless parser passing the `toml-test` valid and invalid suites
-- [ ] **M2** Error recovery and rich diagnostics (multi-line spans, secondary labels, colors)
+- [x] **M2** Error recovery and rich diagnostics (multi-line spans, secondary labels, colors)
 - [ ] **M3** Semantic checks (duplicate keys, redefined tables), `.kosmetic.toml` config, 8-10 rules
 - [ ] **M4** `--fix` and a formatter built on the lossless tree
 - [ ] **M5** Schema rules for `Cargo.toml` and `pyproject.toml`
