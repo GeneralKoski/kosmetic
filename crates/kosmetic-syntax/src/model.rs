@@ -58,8 +58,8 @@ pub struct Table {
     pub origin: TableOrigin,
     /// Keys and values.
     pub entries: BTreeMap<String, Value>,
-    /// Where each key was first defined, for "first defined here" labels.
-    spans: BTreeMap<String, Span>,
+    /// Key and value span of each entry, for diagnostics.
+    spans: BTreeMap<String, (Span, Span)>,
 }
 
 impl Table {
@@ -71,9 +71,20 @@ impl Table {
         }
     }
 
-    fn insert(&mut self, key: &str, span: Span, value: Value) {
+    fn insert(&mut self, key: &str, key_span: Span, value_span: Span, value: Value) {
         self.entries.insert(key.to_owned(), value);
-        self.spans.insert(key.to_owned(), span);
+        self.spans.insert(key.to_owned(), (key_span, value_span));
+    }
+
+    /// Where `key` was first defined: the last segment of its key.
+    pub fn key_span(&self, key: &str) -> Option<Span> {
+        self.spans.get(key).map(|&(key, _)| key)
+    }
+
+    /// Where the value of `key` is. Tables created by a header or a dotted
+    /// key have no value of their own and point at their key instead.
+    pub fn value_span(&self, key: &str) -> Option<Span> {
+        self.spans.get(key).map(|&(_, value)| value)
     }
 }
 
@@ -142,11 +153,11 @@ impl Builder<'_> {
         for (part, part_span) in parents {
             table = self.descend(table, part, *part_span, true)?;
         }
-        let first = table.spans.get(name).copied();
+        let first = table.key_span(name);
 
         if node.kind == NodeKind::ArrayTable {
             match table.entries.get(name) {
-                None => table.insert(name, *span, Value::ArrayOfTables(Vec::new())),
+                None => table.insert(name, *span, *span, Value::ArrayOfTables(Vec::new())),
                 Some(Value::ArrayOfTables(_)) => {}
                 Some(_) => {
                     let message =
@@ -165,7 +176,12 @@ impl Builder<'_> {
         }
 
         match table.entries.get(name) {
-            None => table.insert(name, *span, Value::Table(Table::new(TableOrigin::Header))),
+            None => table.insert(
+                name,
+                *span,
+                *span,
+                Value::Table(Table::new(TableOrigin::Header)),
+            ),
             Some(Value::Table(existing)) if existing.origin == TableOrigin::Implicit => {}
             Some(_) => {
                 self.conflict(
@@ -204,7 +220,7 @@ impl Builder<'_> {
                 } else {
                     TableOrigin::Dotted
                 };
-                table.insert(name, span, Value::Table(Table::new(origin)));
+                table.insert(name, span, span, Value::Table(Table::new(origin)));
                 true
             }
             Some(Value::Table(existing)) if header => existing.origin != TableOrigin::Inline,
@@ -213,7 +229,7 @@ impl Builder<'_> {
             Some(_) => false,
         };
         if !allowed {
-            let first = table.spans.get(name).copied();
+            let first = table.key_span(name);
             if header {
                 let message =
                     format!("`{name}` is already defined and cannot be extended by a header");
@@ -240,10 +256,10 @@ impl Builder<'_> {
         let Some(((name, span), parents)) = key.split_last() else {
             return;
         };
-        let Some(value) = node.nodes().find(|n| n.kind.is_value()) else {
+        let Some(value_node) = node.nodes().find(|n| n.kind.is_value()) else {
             return;
         };
-        let Some(value) = self.value(value) else {
+        let Some(value) = self.value(value_node) else {
             return;
         };
         let mut table = table;
@@ -254,7 +270,7 @@ impl Builder<'_> {
             table = inner;
         }
         if table.entries.contains_key(name) {
-            let first = table.spans.get(name).copied();
+            let first = table.key_span(name);
             self.conflict(
                 "semantic/duplicate-key",
                 format!("duplicate key `{name}`"),
@@ -263,7 +279,7 @@ impl Builder<'_> {
             );
             return;
         }
-        table.insert(name, *span, value);
+        table.insert(name, *span, value_node.span, value);
     }
 
     fn value(&mut self, node: &Node) -> Option<Value> {
@@ -380,6 +396,8 @@ fn datetime_in_range(text: &str, kind: DateTimeKind) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use kosmetic_diagnostics::Span;
+
     use super::{Table, TableOrigin, Value, build_model};
     use crate::parse;
 
@@ -528,6 +546,20 @@ it = { x.y = 1 }
             codes("a = 2000-02-29\nb = 23:59:59.999\nc = 1979-05-27T00:00:00-23:59"),
             Vec::<&str>::new()
         );
+    }
+
+    #[test]
+    fn records_key_and_value_spans() {
+        let (table, _) = model("[t]\na.b = \"x\"\n");
+        let Value::Table(t) = &table.entries["t"] else {
+            panic!("not a table");
+        };
+        let Value::Table(a) = &t.entries["a"] else {
+            panic!("not a table");
+        };
+        assert_eq!(table.key_span("t"), Some(Span::new(1, 2)));
+        assert_eq!(a.key_span("b"), Some(Span::new(6, 7)));
+        assert_eq!(a.value_span("b"), Some(Span::new(10, 13)));
     }
 
     #[test]

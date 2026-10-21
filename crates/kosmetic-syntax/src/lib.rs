@@ -15,7 +15,7 @@ mod token;
 mod tree;
 
 pub use lexer::lex;
-pub use literal::DateTimeKind;
+pub use literal::{DateTimeKind, string_value};
 pub use model::{DateTime, Table, TableOrigin, Value, build_model};
 pub use token::{Token, TokenKind};
 pub use tree::{Element, Node, NodeKind};

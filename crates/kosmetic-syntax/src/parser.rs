@@ -781,6 +781,30 @@ mod tests {
     }
 
     #[test]
+    fn descendants_are_in_source_order() {
+        use crate::NodeKind::*;
+        let kinds: Vec<_> = parse("a = [1, {b = 2}]")
+            .tree
+            .descendants()
+            .map(|node| node.kind)
+            .collect();
+        assert_eq!(
+            kinds,
+            [
+                Document,
+                KeyValue,
+                Key,
+                Array,
+                Integer,
+                InlineTable,
+                KeyValue,
+                Key,
+                Integer
+            ]
+        );
+    }
+
+    #[test]
     fn lexer_errors_are_not_reported_twice() {
         assert_eq!(codes("é = 1"), vec!["syntax/unexpected-character"]);
     }

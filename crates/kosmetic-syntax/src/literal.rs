@@ -134,7 +134,7 @@ pub(crate) fn datetime_kind(text: &str) -> Option<DateTimeKind> {
 /// the newline right after a multi-line opener trimmed. Other tokens are
 /// returned as they are, which is what bare keys need. Never fails: invalid
 /// escapes were already reported by the lexer and are kept verbatim.
-pub(crate) fn string_value(kind: TokenKind, text: &str) -> String {
+pub fn string_value(kind: TokenKind, text: &str) -> String {
     let (quote, multiline, basic) = match kind {
         TokenKind::BasicString => ("\"", false, true),
         TokenKind::MultilineBasicString => ("\"\"\"", true, true),

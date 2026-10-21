@@ -100,6 +100,18 @@ impl Node {
         })
     }
 
+    /// This node and every node below it, in source order.
+    pub fn descendants(&self) -> impl Iterator<Item = &Node> {
+        let mut stack = vec![self];
+        std::iter::from_fn(move || {
+            let node = stack.pop()?;
+            let start = stack.len();
+            stack.extend(node.nodes());
+            stack[start..].reverse();
+            Some(node)
+        })
+    }
+
     /// First direct child node of the given kind.
     pub fn child(&self, kind: NodeKind) -> Option<&Node> {
         self.nodes().find(|node| node.kind == kind)
