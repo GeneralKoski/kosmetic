@@ -13,5 +13,8 @@ repository.workspace = true
 [dependencies]
 kosmetic-diagnostics.workspace = true
 
+[dev-dependencies]
+proptest = { version = "1.11.0", default-features = false, features = ["std"] }
+
 [lints]
 workspace = true
