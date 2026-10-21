@@ -5,6 +5,7 @@
 //! them fail the build.
 
 mod config;
+mod semantic;
 mod style;
 
 pub use config::{Config, Level};
@@ -62,7 +63,17 @@ pub trait Rule {
 
 /// Every rule kosmetic knows about.
 pub fn all_rules() -> Vec<Box<dyn Rule>> {
-    vec![Box::new(style::NoTrailingWhitespace)]
+    vec![
+        Box::new(style::NoTrailingWhitespace),
+        Box::new(style::FinalNewline),
+        Box::new(style::NoMultipleBlankLines),
+        Box::new(style::ConsistentLineEndings),
+        Box::new(style::SpacesAroundEquals),
+        Box::new(style::CommentSpace),
+        Box::new(style::PreferBareKeys),
+        Box::new(style::SortedKeys),
+        Box::new(semantic::MixedArrayTypes),
+    ]
 }
 
 /// Runs every enabled rule on a parsed file and returns their diagnostics,
@@ -86,6 +97,40 @@ pub fn run(source: &str, parse: &Parse, config: &Config) -> Vec<Diagnostic> {
     }
     diagnostics.sort_by_key(|diagnostic| diagnostic.span);
     diagnostics
+}
+
+#[cfg(test)]
+pub(crate) mod testing {
+    use kosmetic_diagnostics::Diagnostic;
+
+    use crate::{Config, Level, run};
+
+    /// Diagnostics of one rule, at its default level or the given one.
+    pub(crate) fn lint(code: &str, source: &str, level: Option<Level>) -> Vec<Diagnostic> {
+        let mut config = Config::default();
+        if let Some(level) = level {
+            config.rules.insert(code.to_owned(), level);
+        }
+        let parse = kosmetic_syntax::parse(source);
+        run(source, &parse, &config)
+            .into_iter()
+            .filter(|diagnostic| diagnostic.code == code)
+            .collect()
+    }
+
+    /// The source with the fixes of one rule applied. They must not overlap.
+    pub(crate) fn fixed(code: &str, source: &str) -> String {
+        let mut out = source.to_owned();
+        let mut fixes: Vec<_> = lint(code, source, Some(Level::Warn))
+            .into_iter()
+            .filter_map(|diagnostic| diagnostic.fix)
+            .collect();
+        fixes.sort_by_key(|fix| fix.span);
+        for fix in fixes.iter().rev() {
+            out.replace_range(fix.span.range(), &fix.replacement);
+        }
+        out
+    }
 }
 
 #[cfg(test)]
