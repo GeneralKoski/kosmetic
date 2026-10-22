@@ -9,13 +9,17 @@ rust-version = "1.85"
 license = "MIT"
 authors = ["Martin Trajkovski"]
 repository = "https://github.com/GeneralKoski/kosmetic"
+homepage = "https://github.com/GeneralKoski/kosmetic"
+readme = "README.md"
+keywords = ["toml", "linter", "formatter", "lsp", "parser"]
+categories = ["development-tools", "command-line-utilities", "parser-implementations"]
 
 [workspace.dependencies]
-kosmetic-diagnostics = { path = "crates/kosmetic-diagnostics" }
-kosmetic-syntax = { path = "crates/kosmetic-syntax" }
-kosmetic-rules = { path = "crates/kosmetic-rules" }
-kosmetic-format = { path = "crates/kosmetic-format" }
-kosmetic-lsp = { path = "crates/kosmetic-lsp" }
+kosmetic-diagnostics = { path = "crates/kosmetic-diagnostics", version = "0.1.0" }
+kosmetic-syntax = { path = "crates/kosmetic-syntax", version = "0.1.0" }
+kosmetic-rules = { path = "crates/kosmetic-rules", version = "0.1.0" }
+kosmetic-format = { path = "crates/kosmetic-format", version = "0.1.0" }
+kosmetic-lsp = { path = "crates/kosmetic-lsp", version = "0.1.0" }
 
 clap = { version = "4.6", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }

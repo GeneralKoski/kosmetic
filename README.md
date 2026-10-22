@@ -40,6 +40,7 @@ kosmetic check --color never Cargo.toml    # auto (default), always, never
 kosmetic check --fix Cargo.toml            # apply the automatic fixes
 kosmetic fmt Cargo.toml                    # format in place
 kosmetic fmt --check Cargo.toml            # CI: fail if a file would change
+kosmetic fmt --diff Cargo.toml             # same, and show what would change
 kosmetic fmt - < Cargo.toml                # stdin to stdout, for editors
 kosmetic lsp                               # language server on stdin/stdout
 kosmetic rules                             # list available rules
@@ -49,7 +50,7 @@ A directory stands for the `.toml` files below it, in alphabetical order.
 Directories starting with `.`, `target`, `node_modules` and `vendor` are not
 entered. A file named on the command line is always checked.
 
-Exit codes: `0` no errors, `1` at least one error (`fmt --check`: a file
+Exit codes: `0` no errors, `1` at least one error (`fmt --check` and `--diff`: a file
 would change), `2` the run failed (unreadable file, bad arguments, invalid
 configuration, a file `fmt` cannot format).
 
@@ -181,7 +182,7 @@ cargo clippy --all-targets -- -D warnings
 cargo fmt --all
 scripts/toml-test.sh   # official toml-test suite, needs Go
 
-# VS Code extension: plain JavaScript, no build step
+# VS Code extension: source in src/, bundled with esbuild into dist/
 cd editors/vscode && npm install && npm run package
 ```
 

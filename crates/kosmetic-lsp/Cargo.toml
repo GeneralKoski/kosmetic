@@ -7,6 +7,10 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 # No LSP crates on purpose: JSON-RPC framing and the few messages used are
 # written by hand on top of serde_json.

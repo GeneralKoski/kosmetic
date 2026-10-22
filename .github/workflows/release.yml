@@ -1,0 +1,102 @@
+name: Release
+
+# Pushing a tag like v0.1.0 builds the binaries and the VS Code extension and
+# publishes them in a GitHub release. Running it by hand only builds them, to
+# check that the release would work.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: read
+
+jobs:
+  binaries:
+    name: binary (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-gnu, os: ubuntu-24.04, archive: tar.gz }
+          - { target: aarch64-apple-darwin, os: macos-latest, archive: tar.gz }
+          - { target: x86_64-apple-darwin, os: macos-latest, archive: tar.gz }
+          - { target: x86_64-pc-windows-msvc, os: windows-latest, archive: zip }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - run: cargo build --release --locked -p kosmetic-cli --target ${{ matrix.target }}
+      - name: Package
+        shell: bash
+        run: |
+          name="kosmetic-${{ matrix.target }}"
+          mkdir "$name"
+          cp LICENSE README.md CHANGELOG.md "$name/"
+          if [ "${{ matrix.archive }}" = zip ]; then
+            cp "target/${{ matrix.target }}/release/kosmetic.exe" "$name/"
+            7z a "$name.zip" "$name" > /dev/null
+            echo "ASSET=$name.zip" >> "$GITHUB_ENV"
+          else
+            cp "target/${{ matrix.target }}/release/kosmetic" "$name/"
+            tar czf "$name.tar.gz" "$name"
+            echo "ASSET=$name.tar.gz" >> "$GITHUB_ENV"
+          fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: kosmetic-${{ matrix.target }}
+          path: ${{ env.ASSET }}
+
+  extension:
+    name: VS Code extension
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: editors/vscode
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npx vsce package
+      - uses: actions/upload-artifact@v7
+        with:
+          name: kosmetic-vscode
+          path: editors/vscode/*.vsix
+
+  release:
+    name: GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [binaries, extension]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: The tag must match the version
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME, Cargo.toml says $version"; exit 1; }
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Notes and checksums
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '$1 == "##" && $2 == v { on = 1; next } $1 == "##" { on = 0 } on' CHANGELOG.md > notes.md
+          test -s notes.md || { echo "no section for $version in CHANGELOG.md"; exit 1; }
+          cd dist && sha256sum * > SHA256SUMS
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "kosmetic ${GITHUB_REF_NAME#v}" --notes-file notes.md
