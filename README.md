@@ -28,10 +28,19 @@ Cargo.toml:2:18: warning[style/no-trailing-whitespace]: trailing whitespace
   property-tested: on random strings, random bytes and TOML-like input the tree
   stays lossless and the parser never panics.
 
+## Install
+
+```sh
+cargo install kosmetic-cli     # from crates.io, installs the `kosmetic` command
+```
+
+Binaries for Linux, macOS (Apple Silicon and Intel) and Windows are attached to
+every [release](https://github.com/GeneralKoski/kosmetic/releases). The VS Code
+extension is described in [`editors/vscode`](editors/vscode).
+
 ## Usage
 
 ```sh
-cargo install --path crates/kosmetic-cli
 
 kosmetic check Cargo.toml pyproject.toml
 kosmetic check .                           # every .toml file below the directory

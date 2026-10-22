@@ -70,7 +70,7 @@
         "kosmetic.path": {
           "type": "string",
           "default": "kosmetic",
-          "markdownDescription": "Path of the `kosmetic` executable. The server is started as `kosmetic lsp`. Install it with `cargo install --path crates/kosmetic-cli`.",
+          "markdownDescription": "Path of the `kosmetic` executable. The server is started as `kosmetic lsp`. Install it with `cargo install kosmetic-cli`.",
           "scope": "machine"
         },
         "kosmetic.trace.server": {

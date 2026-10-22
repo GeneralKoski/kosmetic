@@ -15,7 +15,7 @@ The `kosmetic` executable must be installed. The extension starts it as
 `kosmetic lsp`:
 
 ```sh
-cargo install --path crates/kosmetic-cli
+cargo install kosmetic-cli
 ```
 
 If it is not on your `PATH`, set `kosmetic.path` in your user settings. The

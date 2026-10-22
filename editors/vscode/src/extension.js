@@ -37,7 +37,7 @@ async function start() {
     client = undefined;
     vscode.window.showErrorMessage(
       `kosmetic could not start the language server (${error.message}). ` +
-        'Install it with `cargo install --path crates/kosmetic-cli` or set "kosmetic.path".',
+        'Install it with `cargo install kosmetic-cli` or set "kosmetic.path".',
     );
   }
 }
