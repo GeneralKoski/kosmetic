@@ -16,7 +16,7 @@ pub use fix::{FixError, Fixed, fix_source};
 use std::path::Path;
 
 use kosmetic_diagnostics::{Diagnostic, Severity, Span};
-use kosmetic_syntax::{Parse, Table, build_model};
+use kosmetic_syntax::{Parse, Table, build_model, parse};
 
 /// What a file is, which decides whether the schema rules apply to it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -116,10 +116,33 @@ pub fn all_rules() -> Vec<Box<dyn Rule>> {
     ]
 }
 
+/// Everything kosmetic has to say about a file: syntax errors, semantic
+/// errors and the diagnostics of the enabled rules, sorted by position.
+/// `file` selects the schema rules that apply.
+pub fn lint(source: &str, config: &Config, file: FileKind) -> Vec<Diagnostic> {
+    let parse = parse(source);
+    let (model, semantic) = build_model(source, &parse.tree);
+    let mut diagnostics = parse.diagnostics.clone();
+    diagnostics.extend(semantic);
+    diagnostics.extend(run_with_model(source, &parse, &model, config, file));
+    diagnostics.sort_by_key(|diagnostic| diagnostic.span);
+    diagnostics
+}
+
 /// Runs every enabled rule on a parsed file and returns their diagnostics,
 /// sorted by position. `file` selects the schema rules that apply.
 pub fn run(source: &str, parse: &Parse, config: &Config, file: FileKind) -> Vec<Diagnostic> {
     let (model, _) = build_model(source, &parse.tree);
+    run_with_model(source, parse, &model, config, file)
+}
+
+fn run_with_model(
+    source: &str,
+    parse: &Parse,
+    model: &Table,
+    config: &Config,
+    file: FileKind,
+) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
     for rule in all_rules() {
         let meta = rule.meta();
@@ -129,7 +152,7 @@ pub fn run(source: &str, parse: &Parse, config: &Config, file: FileKind) -> Vec<
         let mut ctx = RuleContext {
             source,
             parse,
-            model: &model,
+            model,
             file,
             meta,
             severity,

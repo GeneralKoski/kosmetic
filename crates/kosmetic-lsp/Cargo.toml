@@ -1,0 +1,20 @@
+[package]
+name = "kosmetic-lsp"
+description = "Language server for kosmetic, speaking LSP over stdio"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+# No LSP crates on purpose: JSON-RPC framing and the few messages used are
+# written by hand on top of serde_json.
+[dependencies]
+kosmetic-diagnostics.workspace = true
+kosmetic-rules.workspace = true
+kosmetic-format.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

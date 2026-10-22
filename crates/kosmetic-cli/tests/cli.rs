@@ -262,3 +262,62 @@ fn schema_rules_can_be_configured() {
     assert!(stdout.contains("error[schema/cargo-unknown-key]"));
     assert!(stdout.contains("warning[schema/cargo-publish-metadata]"));
 }
+
+#[test]
+fn lsp_serves_a_session_over_stdio() {
+    use std::io::{BufRead, BufReader, Write};
+    use std::process::Stdio;
+
+    fn send(stdin: &mut impl Write, body: &str) {
+        write!(stdin, "Content-Length: {}\r\n\r\n{body}", body.len()).unwrap();
+        stdin.flush().unwrap();
+    }
+
+    fn receive(stdout: &mut impl BufRead) -> String {
+        let mut length = 0;
+        loop {
+            let mut line = String::new();
+            stdout.read_line(&mut line).unwrap();
+            if let Some(value) = line.strip_prefix("Content-Length: ") {
+                length = value.trim().parse().unwrap();
+            }
+            if line.trim().is_empty() {
+                break;
+            }
+        }
+        let mut body = vec![0; length];
+        stdout.read_exact(&mut body).unwrap();
+        String::from_utf8(body).unwrap()
+    }
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_kosmetic"))
+        .arg("lsp")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut stdin = child.stdin.take().unwrap();
+    let mut stdout = BufReader::new(child.stdout.take().unwrap());
+
+    send(
+        &mut stdin,
+        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#,
+    );
+    assert!(receive(&mut stdout).contains("\"documentFormattingProvider\":true"));
+
+    send(
+        &mut stdin,
+        r#"{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///tmp/none/a.toml","text":"a = 1 \n"}}}"#,
+    );
+    let published = receive(&mut stdout);
+    assert!(published.contains("publishDiagnostics"));
+    assert!(published.contains("style/no-trailing-whitespace"));
+
+    send(
+        &mut stdin,
+        r#"{"jsonrpc":"2.0","id":2,"method":"shutdown"}"#,
+    );
+    assert!(receive(&mut stdout).contains("\"result\":null"));
+    send(&mut stdin, r#"{"jsonrpc":"2.0","method":"exit"}"#);
+    assert!(child.wait().unwrap().success());
+}

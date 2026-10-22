@@ -153,6 +153,7 @@ dependencies = [
  "clap",
  "kosmetic-diagnostics",
  "kosmetic-format",
+ "kosmetic-lsp",
  "kosmetic-rules",
  "kosmetic-syntax",
 ]
@@ -171,6 +172,16 @@ version = "0.1.0"
 dependencies = [
  "kosmetic-diagnostics",
  "kosmetic-syntax",
+]
+
+[[package]]
+name = "kosmetic-lsp"
+version = "0.1.0"
+dependencies = [
+ "kosmetic-diagnostics",
+ "kosmetic-format",
+ "kosmetic-rules",
+ "serde_json",
 ]
 
 [[package]]

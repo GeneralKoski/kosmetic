@@ -17,6 +17,7 @@ kosmetic-diagnostics.workspace = true
 kosmetic-syntax.workspace = true
 kosmetic-rules.workspace = true
 kosmetic-format.workspace = true
+kosmetic-lsp.workspace = true
 clap.workspace = true
 
 [lints]

@@ -51,6 +51,8 @@ enum Command {
         #[arg(long)]
         check: bool,
     },
+    /// Run the language server, speaking LSP over standard input and output.
+    Lsp,
     /// List every available rule.
     Rules,
 }
@@ -94,6 +96,7 @@ fn main() -> ExitCode {
             }
         }
         Command::Fmt { paths, check } => fmt(&paths, check),
+        Command::Lsp => lsp(),
         Command::Rules => {
             for rule in all_rules() {
                 let meta = rule.meta();
@@ -197,16 +200,7 @@ fn check(paths: &[PathBuf], config: &Config, format: Format, color: bool, fix: b
             };
         }
 
-        let parse = kosmetic_syntax::parse(&source);
-        let mut diagnostics = parse.diagnostics.clone();
-        diagnostics.extend(kosmetic_syntax::build_model(&source, &parse.tree).1);
-        diagnostics.extend(kosmetic_rules::run(
-            &source,
-            &parse,
-            config,
-            FileKind::from_path(path),
-        ));
-        diagnostics.sort_by_key(|diagnostic| diagnostic.span);
+        let diagnostics = kosmetic_rules::lint(&source, config, FileKind::from_path(path));
 
         has_errors |= diagnostics
             .iter()
@@ -292,5 +286,20 @@ fn fmt(paths: &[PathBuf], check: bool) -> ExitCode {
         ExitCode::from(1)
     } else {
         ExitCode::SUCCESS
+    }
+}
+
+/// Serves the language server on the standard streams. Its own messages go
+/// to stdout, so everything else it has to say goes to stderr.
+fn lsp() -> ExitCode {
+    let stdin = std::io::stdin();
+    let stdout = std::io::stdout();
+    match kosmetic_lsp::run(stdin.lock(), stdout.lock()) {
+        Ok(0) => ExitCode::SUCCESS,
+        Ok(code) => ExitCode::from(u8::try_from(code).unwrap_or(1)),
+        Err(err) => {
+            eprintln!("kosmetic: language server stopped: {err}");
+            ExitCode::from(2)
+        }
     }
 }
