@@ -9,6 +9,26 @@ Diagnostics, quick fixes and formatting for TOML files, from the
 - formatting of the whole document
 - the nearest `.kosmetic.toml` configures the rules, and is checked itself
 
+## Install the extension
+
+The extension is published on [Open VSX](https://open-vsx.org/extension/generalkoski/kosmetic),
+the open registry used by VSCodium, Cursor, Gitpod and other editors based on
+VS Code. In those editors, search for **kosmetic** in the Extensions view and
+install it.
+
+It is **not** on the Visual Studio Marketplace, the registry of Microsoft's own
+VS Code, which only accepts publishers that have an Azure subscription. In VS
+Code, install it from the `.vsix` file attached to every
+[release](https://github.com/GeneralKoski/kosmetic/releases):
+
+```sh
+code --install-extension kosmetic-0.1.0.vsix
+```
+
+or open the Extensions view, click `...` at the top, choose **Install from
+VSIX...** and pick the file. Updates are not automatic this way: download the
+new `.vsix` of each release and install it again.
+
 ## Requirements
 
 The `kosmetic` executable must be installed. The extension starts it as

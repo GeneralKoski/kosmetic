@@ -35,8 +35,12 @@ cargo install kosmetic-cli     # from crates.io, installs the `kosmetic` command
 ```
 
 Binaries for Linux, macOS (Apple Silicon and Intel) and Windows are attached to
-every [release](https://github.com/GeneralKoski/kosmetic/releases). The VS Code
-extension is described in [`editors/vscode`](editors/vscode).
+every [release](https://github.com/GeneralKoski/kosmetic/releases).
+
+The editor extension is on [Open VSX](https://open-vsx.org/extension/generalkoski/kosmetic)
+(VSCodium, Cursor and similar editors). For Microsoft's VS Code, install the
+`.vsix` file of the release with `code --install-extension kosmetic-0.1.0.vsix`.
+More in [`editors/vscode`](editors/vscode).
 
 ## Usage
 
