@@ -173,6 +173,9 @@ cargo test
 cargo clippy --all-targets -- -D warnings
 cargo fmt --all
 scripts/toml-test.sh   # official toml-test suite, needs Go
+
+# VS Code extension: plain JavaScript, no build step
+cd editors/vscode && npm install && npm run package
 ```
 
 `toml-test` is a git submodule pinned to a release: clone with

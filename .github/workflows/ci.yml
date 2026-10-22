@@ -43,5 +43,23 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: stable
+          cache-dependency-path: toml-test/go.sum
       - uses: Swatinem/rust-cache@v2
       - run: scripts/toml-test.sh -color=never
+      # The formatter must keep the values of every valid file of the suite.
+      - run: cargo test -p kosmetic-format toml_test_corpus
+
+  vscode:
+    name: VS Code extension
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: editors/vscode
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: node --check extension.js
+      - run: npm install --no-audit --no-fund
+      - run: npx --yes @vscode/vsce package

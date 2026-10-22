@@ -155,7 +155,6 @@ dependencies = [
  "kosmetic-format",
  "kosmetic-lsp",
  "kosmetic-rules",
- "kosmetic-syntax",
 ]
 
 [[package]]
