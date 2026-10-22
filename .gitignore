@@ -4,3 +4,8 @@
 /fuzz/target
 /fuzz/corpus
 /fuzz/artifacts
+
+# VS Code extension
+/editors/vscode/node_modules
+/editors/vscode/*.vsix
+/editors/vscode/package-lock.json

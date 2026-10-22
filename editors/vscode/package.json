@@ -1,0 +1,67 @@
+{
+  "name": "kosmetic",
+  "displayName": "kosmetic",
+  "description": "TOML linter and formatter: diagnostics, quick fixes and formatting from the kosmetic language server.",
+  "version": "0.1.0",
+  "publisher": "generalkoski",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/GeneralKoski/kosmetic.git",
+    "directory": "editors/vscode"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Linters", "Formatters", "Programming Languages"],
+  "keywords": ["toml", "lint", "format", "cargo", "pyproject"],
+  "main": "./extension.js",
+  "activationEvents": ["onLanguage:toml"],
+  "contributes": {
+    "languages": [
+      {
+        "id": "toml",
+        "aliases": ["TOML", "toml"],
+        "extensions": [".toml"],
+        "filenames": ["Cargo.lock", "poetry.lock", "uv.lock"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "toml",
+        "scopeName": "source.toml",
+        "path": "./syntaxes/toml.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "title": "kosmetic",
+      "properties": {
+        "kosmetic.path": {
+          "type": "string",
+          "default": "kosmetic",
+          "markdownDescription": "Path of the `kosmetic` executable. The server is started as `kosmetic lsp`. Install it with `cargo install --path crates/kosmetic-cli`.",
+          "scope": "machine-overridable"
+        },
+        "kosmetic.trace.server": {
+          "type": "string",
+          "enum": ["off", "messages", "verbose"],
+          "default": "off",
+          "description": "Traces the messages between VS Code and the language server."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "kosmetic.restartServer",
+        "title": "kosmetic: Restart Language Server"
+      }
+    ]
+  },
+  "scripts": {
+    "package": "npx @vscode/vsce package"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  }
+}

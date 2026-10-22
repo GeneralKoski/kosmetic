@@ -13,8 +13,8 @@ Cargo.toml:2:18: warning[style/no-trailing-whitespace]: trailing whitespace
 > Status: early development. The lexer, the lossless parser and the value
 > model pass the `toml-test` suite, diagnostics show labels and colors,
 > seventeen configurable rules run, `--fix` and `kosmetic fmt` rewrite files, and
-> `Cargo.toml` and `pyproject.toml` are checked against their schemas (M1-M5).
-> The language server is the only milestone left.
+> `Cargo.toml` and `pyproject.toml` are checked against their schemas, and a
+> language server and a VS Code extension bring it all into the editor (M1-M6).
 
 ## Why
 
@@ -38,6 +38,7 @@ kosmetic check --fix Cargo.toml            # apply the automatic fixes
 kosmetic fmt Cargo.toml                    # format in place
 kosmetic fmt --check Cargo.toml            # CI: fail if a file would change
 kosmetic fmt - < Cargo.toml                # stdin to stdout, for editors
+kosmetic lsp                               # language server on stdin/stdout
 kosmetic rules                             # list available rules
 ```
 
@@ -105,6 +106,18 @@ Syntax errors (`syntax/...`) and semantic errors (`semantic/duplicate-key`,
 `semantic/table-redefined`, `semantic/integer-overflow`,
 `semantic/invalid-datetime`) are always errors and cannot be turned off.
 
+## Editor support
+
+`kosmetic lsp` is a language server (LSP over stdio, hand-written on top of
+`serde_json`, no LSP crate). It publishes diagnostics while you type, offers
+the fixes of the rules as quick fixes and as a "fix all" source action, formats
+documents, reads the nearest `.kosmetic.toml` (reloaded when it changes) and
+checks `.kosmetic.toml` itself, so a misspelled rule shows up as you type it.
+
+Any LSP client can use it: start `kosmetic lsp` for TOML files. For VS Code
+there is an extension in [`editors/vscode`](editors/vscode) that starts the
+server, with a TOML grammar and the format-on-save settings.
+
 ## Schema rules
 
 Files named `Cargo.toml` and `pyproject.toml` are also checked against what
@@ -140,6 +153,7 @@ source ─▶ lexer ─▶ tokens ─▶ parser ─▶ lossless tree ─▶ sema
 | `kosmetic-syntax` | Lexer, tokens, lossless parser, value model and semantic checks |
 | `kosmetic-rules` | `Rule` trait, rule engine, configuration, built-in rules (style, semantic and schema), `fix_source` |
 | `kosmetic-format` | The formatter, built on the lossless tree |
+| `kosmetic-lsp` | The language server: framing, positions, diagnostics, formatting, code actions |
 | `kosmetic-cli` | The `kosmetic` binary |
 | `kosmetic-toml-test` | Decoder adapter for the `toml-test` suite (not published) |
 
@@ -150,7 +164,7 @@ source ─▶ lexer ─▶ tokens ─▶ parser ─▶ lossless tree ─▶ sema
 - [x] **M3** Semantic checks (duplicate keys, redefined tables), `.kosmetic.toml` config, 8-10 rules
 - [x] **M4** `--fix` and a formatter built on the lossless tree
 - [x] **M5** Schema rules for `Cargo.toml` and `pyproject.toml`
-- [ ] **M6** Language server and VS Code extension (optional)
+- [x] **M6** Language server and VS Code extension
 
 ## Development
 
