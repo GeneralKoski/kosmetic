@@ -5,10 +5,12 @@
 //! them fail the build.
 
 mod config;
+mod fix;
 mod semantic;
 mod style;
 
 pub use config::{Config, Level};
+pub use fix::{FixError, Fixed, fix_source};
 
 use kosmetic_diagnostics::{Diagnostic, Severity, Span};
 use kosmetic_syntax::Parse;

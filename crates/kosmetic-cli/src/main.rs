@@ -4,12 +4,12 @@
 //! 2 the run itself failed (unreadable file, bad arguments).
 
 use std::io::IsTerminal;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand, ValueEnum};
 use kosmetic_diagnostics::{Diagnostic, Severity, render_human, render_json};
-use kosmetic_rules::{Config, all_rules};
+use kosmetic_rules::{Config, FixError, all_rules, fix_source};
 
 #[derive(Parser)]
 #[command(name = "kosmetic", version, about = "A fast, hand-written TOML linter")]
@@ -35,6 +35,9 @@ enum Command {
         /// current directory or one of its parents.
         #[arg(long)]
         config: Option<PathBuf>,
+        /// Apply the automatic fixes to the files, then report what is left.
+        #[arg(long)]
+        fix: bool,
     },
     /// List every available rule.
     Rules,
@@ -70,10 +73,11 @@ fn main() -> ExitCode {
             format,
             color,
             config,
+            fix,
         } => {
             let color = color.enabled();
             match load_config(config, format, color) {
-                Ok(config) => check(&paths, &config, format, color),
+                Ok(config) => check(&paths, &config, format, color, fix),
                 Err(code) => code,
             }
         }
@@ -130,17 +134,55 @@ fn print_diagnostics(
     }
 }
 
-fn check(paths: &[PathBuf], config: &Config, format: Format, color: bool) -> ExitCode {
+/// Writes the fixes of `path` back to it and returns the new source.
+/// Files with errors are left as they are. Fails only if a fix would change
+/// the meaning of the file or the file cannot be written.
+fn apply_fix(path: &Path, source: String, config: &Config) -> Result<String, ExitCode> {
+    let name = path.display();
+    match fix_source(&source, config) {
+        Ok(fixed) if fixed.applied == 0 => Ok(source),
+        Ok(fixed) => {
+            std::fs::write(path, &fixed.source).map_err(|err| {
+                eprintln!("kosmetic: cannot write {name}: {err}");
+                ExitCode::from(2)
+            })?;
+            let plural = if fixed.applied == 1 { "" } else { "s" };
+            eprintln!(
+                "kosmetic: fixed {} problem{plural} in {name}",
+                fixed.applied
+            );
+            Ok(fixed.source)
+        }
+        Err(FixError::Invalid) => {
+            eprintln!("kosmetic: {name} has errors, not fixing it");
+            Ok(source)
+        }
+        Err(FixError::ChangesMeaning) => {
+            eprintln!(
+                "kosmetic: a fix would change the meaning of {name}, left untouched (this is a bug)"
+            );
+            Err(ExitCode::from(2))
+        }
+    }
+}
+
+fn check(paths: &[PathBuf], config: &Config, format: Format, color: bool, fix: bool) -> ExitCode {
     let mut has_errors = false;
 
     for path in paths {
-        let source = match std::fs::read_to_string(path) {
+        let mut source = match std::fs::read_to_string(path) {
             Ok(source) => source,
             Err(err) => {
                 eprintln!("kosmetic: cannot read {}: {err}", path.display());
                 return ExitCode::from(2);
             }
         };
+        if fix {
+            source = match apply_fix(path, source, config) {
+                Ok(source) => source,
+                Err(code) => return code,
+            };
+        }
 
         let parse = kosmetic_syntax::parse(&source);
         let mut diagnostics = parse.diagnostics.clone();

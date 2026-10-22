@@ -5,8 +5,9 @@ use kosmetic_diagnostics::{Diagnostic, Severity, Span};
 use crate::literal::{DateTimeKind, datetime_kind, string_value};
 use crate::{Node, NodeKind, TokenKind};
 
-/// A TOML value, decoded from the tree.
-#[derive(Debug, Clone, PartialEq)]
+/// A TOML value, decoded from the tree. Equality compares content only: two
+/// `nan` floats are equal, and spans are ignored.
+#[derive(Debug, Clone)]
 pub enum Value {
     /// Any of the four string kinds, escapes resolved.
     String(String),
@@ -52,7 +53,7 @@ pub enum TableOrigin {
 }
 
 /// A table: its keys, sorted, and where it comes from.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Table {
     /// How the table was created.
     pub origin: TableOrigin,
@@ -60,6 +61,30 @@ pub struct Table {
     pub entries: BTreeMap<String, Value>,
     /// Key and value span of each entry, for diagnostics.
     spans: BTreeMap<String, (Span, Span)>,
+}
+
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::String(a), Self::String(b)) => a == b,
+            (Self::Integer(a), Self::Integer(b)) => a == b,
+            (Self::Float(a), Self::Float(b)) => {
+                a.to_bits() == b.to_bits() || (a.is_nan() && b.is_nan())
+            }
+            (Self::Boolean(a), Self::Boolean(b)) => a == b,
+            (Self::DateTime(a), Self::DateTime(b)) => a == b,
+            (Self::Array(a), Self::Array(b)) => a == b,
+            (Self::ArrayOfTables(a), Self::ArrayOfTables(b)) => a == b,
+            (Self::Table(a), Self::Table(b)) => a == b,
+            _ => false,
+        }
+    }
+}
+
+impl PartialEq for Table {
+    fn eq(&self, other: &Self) -> bool {
+        self.origin == other.origin && self.entries == other.entries
+    }
 }
 
 impl Table {

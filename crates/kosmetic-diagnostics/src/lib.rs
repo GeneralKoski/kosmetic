@@ -4,10 +4,12 @@
 //! Line and column numbers are computed only when a diagnostic is rendered,
 //! through a [`LineIndex`].
 
+mod edit;
 mod line_index;
 mod render;
 mod span;
 
+pub use edit::apply_fixes;
 pub use line_index::{LineCol, LineIndex};
 pub use render::{render_human, render_json};
 pub use span::Span;
