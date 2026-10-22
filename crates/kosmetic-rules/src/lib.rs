@@ -6,14 +6,40 @@
 
 mod config;
 mod fix;
+mod schema;
 mod semantic;
 mod style;
 
 pub use config::{Config, Level};
 pub use fix::{FixError, Fixed, fix_source};
 
+use std::path::Path;
+
 use kosmetic_diagnostics::{Diagnostic, Severity, Span};
-use kosmetic_syntax::Parse;
+use kosmetic_syntax::{Parse, Table, build_model};
+
+/// What a file is, which decides whether the schema rules apply to it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FileKind {
+    /// Any TOML file: only the syntax, semantic and style rules run.
+    #[default]
+    Other,
+    /// A `Cargo.toml` manifest.
+    CargoManifest,
+    /// A `pyproject.toml` file.
+    PyProject,
+}
+
+impl FileKind {
+    /// Recognizes a file by its name.
+    pub fn from_path(path: &Path) -> Self {
+        match path.file_name().and_then(|name| name.to_str()) {
+            Some("Cargo.toml") => Self::CargoManifest,
+            Some("pyproject.toml") => Self::PyProject,
+            _ => Self::Other,
+        }
+    }
+}
 
 /// Static description of a rule.
 #[derive(Debug, Clone, Copy)]
@@ -30,8 +56,12 @@ pub struct RuleMeta {
 pub struct RuleContext<'a> {
     /// The raw source text.
     pub source: &'a str,
-    /// Tokens (and later the tree) of the file.
+    /// Tokens and tree of the file.
     pub parse: &'a Parse,
+    /// The values of the file, with the spans of keys and values.
+    pub model: &'a Table,
+    /// What kind of file is being checked.
+    pub file: FileKind,
     meta: &'static RuleMeta,
     severity: Severity,
     diagnostics: Vec<Diagnostic>,
@@ -75,12 +105,21 @@ pub fn all_rules() -> Vec<Box<dyn Rule>> {
         Box::new(style::PreferBareKeys),
         Box::new(style::SortedKeys),
         Box::new(semantic::MixedArrayTypes),
+        Box::new(schema::CargoUnknownKey),
+        Box::new(schema::CargoMissingField),
+        Box::new(schema::CargoInvalidValue),
+        Box::new(schema::CargoWildcardDependency),
+        Box::new(schema::CargoPublishMetadata),
+        Box::new(schema::PyprojectUnknownKey),
+        Box::new(schema::PyprojectMissingField),
+        Box::new(schema::PyprojectInvalidValue),
     ]
 }
 
 /// Runs every enabled rule on a parsed file and returns their diagnostics,
-/// sorted by position.
-pub fn run(source: &str, parse: &Parse, config: &Config) -> Vec<Diagnostic> {
+/// sorted by position. `file` selects the schema rules that apply.
+pub fn run(source: &str, parse: &Parse, config: &Config, file: FileKind) -> Vec<Diagnostic> {
+    let (model, _) = build_model(source, &parse.tree);
     let mut diagnostics = Vec::new();
     for rule in all_rules() {
         let meta = rule.meta();
@@ -90,6 +129,8 @@ pub fn run(source: &str, parse: &Parse, config: &Config) -> Vec<Diagnostic> {
         let mut ctx = RuleContext {
             source,
             parse,
+            model: &model,
+            file,
             meta,
             severity,
             diagnostics: Vec::new(),
@@ -105,16 +146,26 @@ pub fn run(source: &str, parse: &Parse, config: &Config) -> Vec<Diagnostic> {
 pub(crate) mod testing {
     use kosmetic_diagnostics::Diagnostic;
 
-    use crate::{Config, Level, run};
+    use crate::{Config, FileKind, Level, run};
 
     /// Diagnostics of one rule, at its default level or the given one.
     pub(crate) fn lint(code: &str, source: &str, level: Option<Level>) -> Vec<Diagnostic> {
+        lint_file(code, source, level, FileKind::Other)
+    }
+
+    /// Like [`lint`], for a file of the given kind.
+    pub(crate) fn lint_file(
+        code: &str,
+        source: &str,
+        level: Option<Level>,
+        file: FileKind,
+    ) -> Vec<Diagnostic> {
         let mut config = Config::default();
         if let Some(level) = level {
             config.rules.insert(code.to_owned(), level);
         }
         let parse = kosmetic_syntax::parse(source);
-        run(source, &parse, &config)
+        run(source, &parse, &config, file)
             .into_iter()
             .filter(|diagnostic| diagnostic.code == code)
             .collect()

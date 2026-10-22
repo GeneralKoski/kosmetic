@@ -11,9 +11,10 @@ Cargo.toml:2:18: warning[style/no-trailing-whitespace]: trailing whitespace
 ```
 
 > Status: early development. The lexer, the lossless parser and the value
-> model pass the `toml-test` suite, diagnostics show labels and colors, nine
-> configurable rules run, and `--fix` and `kosmetic fmt` rewrite files
-> (M1-M4); schema rules for `Cargo.toml` and `pyproject.toml` come next.
+> model pass the `toml-test` suite, diagnostics show labels and colors,
+> seventeen configurable rules run, `--fix` and `kosmetic fmt` rewrite files, and
+> `Cargo.toml` and `pyproject.toml` are checked against their schemas (M1-M5).
+> The language server is the only milestone left.
 
 ## Why
 
@@ -91,10 +92,41 @@ with its position and stops the run.
 | `style/prefer-bare-keys` | warn | yes |
 | `style/sorted-keys` | off | no |
 | `semantic/mixed-array-types` | warn | no |
+| `schema/cargo-unknown-key` | warn | no |
+| `schema/cargo-missing-field` | error | no |
+| `schema/cargo-invalid-value` | error | no |
+| `schema/cargo-wildcard-dependency` | warn | no |
+| `schema/cargo-publish-metadata` | off | no |
+| `schema/pyproject-unknown-key` | warn | no |
+| `schema/pyproject-missing-field` | error | no |
+| `schema/pyproject-invalid-value` | error | no |
 
 Syntax errors (`syntax/...`) and semantic errors (`semantic/duplicate-key`,
 `semantic/table-redefined`, `semantic/integer-overflow`,
 `semantic/invalid-datetime`) are always errors and cannot be turned off.
+
+## Schema rules
+
+Files named `Cargo.toml` and `pyproject.toml` are also checked against what
+Cargo and the Python packaging tools accept. The rules read the values of the
+document, so they point at the exact key or value, and they come with a
+"did you mean" hint for typos. Version syntax (semver, PEP 440, PEP 508) is
+validated by hand-written parsers, no packaging crate is involved.
+
+| Rule | What it checks |
+| --- | --- |
+| `schema/cargo-unknown-key` | keys Cargo does not know in the manifest, `[package]`, `[workspace]`, targets, profiles and dependencies |
+| `schema/cargo-missing-field` | `package.name`, a `name` for every `[[bin]]`, `[[example]]`, `[[test]]` and `[[bench]]`, a source for every dependency table |
+| `schema/cargo-invalid-value` | types, package name, semver version, `edition`, `rust-version`, `resolver`, version requirements, `git` + `path` conflicts, `branch` without `git`, `workspace = true` mixed with a version |
+| `schema/cargo-wildcard-dependency` | `"*"` as a version requirement, which crates.io rejects |
+| `schema/cargo-publish-metadata` | what crates.io needs to publish: `description`, `license`, at most 5 keywords and categories |
+| `schema/pyproject-unknown-key` | unknown top-level tables (tools go under `[tool]`) and unknown keys in `[project]` and `[build-system]` |
+| `schema/pyproject-missing-field` | `project.name`, `project.version` (unless dynamic), `build-system.requires` |
+| `schema/pyproject-invalid-value` | types, project name, PEP 440 `version`, `requires-python`, PEP 508 requirements (dependencies, extras, build requirements, dependency groups), `dynamic` fields that are also set |
+
+Fields inherited from the workspace (`version.workspace = true`) are accepted.
+A field listed in `dynamic` and also set is reported, except with the Poetry
+backend, which merges the two.
 
 ## Architecture
 
@@ -106,7 +138,7 @@ source ─▶ lexer ─▶ tokens ─▶ parser ─▶ lossless tree ─▶ sema
 | --- | --- |
 | `kosmetic-diagnostics` | Spans, line index, diagnostics, human and JSON rendering |
 | `kosmetic-syntax` | Lexer, tokens, lossless parser, value model and semantic checks |
-| `kosmetic-rules` | `Rule` trait, rule engine, configuration, built-in rules, `fix_source` |
+| `kosmetic-rules` | `Rule` trait, rule engine, configuration, built-in rules (style, semantic and schema), `fix_source` |
 | `kosmetic-format` | The formatter, built on the lossless tree |
 | `kosmetic-cli` | The `kosmetic` binary |
 | `kosmetic-toml-test` | Decoder adapter for the `toml-test` suite (not published) |
@@ -117,7 +149,7 @@ source ─▶ lexer ─▶ tokens ─▶ parser ─▶ lossless tree ─▶ sema
 - [x] **M2** Error recovery and rich diagnostics (multi-line spans, secondary labels, colors)
 - [x] **M3** Semantic checks (duplicate keys, redefined tables), `.kosmetic.toml` config, 8-10 rules
 - [x] **M4** `--fix` and a formatter built on the lossless tree
-- [ ] **M5** Schema rules for `Cargo.toml` and `pyproject.toml`
+- [x] **M5** Schema rules for `Cargo.toml` and `pyproject.toml`
 - [ ] **M6** Language server and VS Code extension (optional)
 
 ## Development

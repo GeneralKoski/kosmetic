@@ -10,7 +10,7 @@ use std::process::ExitCode;
 use clap::{Parser, Subcommand, ValueEnum};
 use kosmetic_diagnostics::{Diagnostic, Severity, render_human, render_json};
 use kosmetic_format::FormatError;
-use kosmetic_rules::{Config, FixError, all_rules, fix_source};
+use kosmetic_rules::{Config, FileKind, FixError, all_rules, fix_source};
 
 #[derive(Parser)]
 #[command(name = "kosmetic", version, about = "A fast, hand-written TOML linter")]
@@ -152,7 +152,7 @@ fn print_diagnostics(
 /// the meaning of the file or the file cannot be written.
 fn apply_fix(path: &Path, source: String, config: &Config) -> Result<String, ExitCode> {
     let name = path.display();
-    match fix_source(&source, config) {
+    match fix_source(&source, config, FileKind::from_path(path)) {
         Ok(fixed) if fixed.applied == 0 => Ok(source),
         Ok(fixed) => {
             std::fs::write(path, &fixed.source).map_err(|err| {
@@ -200,7 +200,12 @@ fn check(paths: &[PathBuf], config: &Config, format: Format, color: bool, fix: b
         let parse = kosmetic_syntax::parse(&source);
         let mut diagnostics = parse.diagnostics.clone();
         diagnostics.extend(kosmetic_syntax::build_model(&source, &parse.tree).1);
-        diagnostics.extend(kosmetic_rules::run(&source, &parse, config));
+        diagnostics.extend(kosmetic_rules::run(
+            &source,
+            &parse,
+            config,
+            FileKind::from_path(path),
+        ));
         diagnostics.sort_by_key(|diagnostic| diagnostic.span);
 
         has_errors |= diagnostics

@@ -1,0 +1,8 @@
+[package]
+name = "demo"
+version = "0.1.0"
+edtion = "2021"
+
+[dependencies]
+serde = "*"
+rand = { version = "0.9", features = "std" }

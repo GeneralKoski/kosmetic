@@ -205,3 +205,60 @@ fn formatted_output_passes_check() {
     assert!(!stdout.contains("spaces-around-equals"));
     assert!(!stdout.contains("final-newline"));
 }
+
+#[test]
+fn cargo_manifest_gets_schema_rules() {
+    let output = kosmetic(&["check", "--color", "never", "schema/Cargo.toml"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(output.status.code(), Some(1), "{stdout}");
+    assert!(stdout.contains("schema/Cargo.toml:4:1: warning[schema/cargo-unknown-key]"));
+    assert!(stdout.contains("= help: did you mean `edition`?"));
+    assert!(stdout.contains("warning[schema/cargo-wildcard-dependency]"));
+    assert!(stdout.contains(
+        "error[schema/cargo-invalid-value]: `rand.features` must be an array of strings, found a string"
+    ));
+}
+
+#[test]
+fn pyproject_gets_schema_rules() {
+    let output = kosmetic(&["check", "--color", "never", "schema/pyproject.toml"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(output.status.code(), Some(1), "{stdout}");
+    assert!(
+        stdout.contains(
+            "error[schema/pyproject-invalid-value]: `3.9` is not a valid version specifier"
+        )
+    );
+}
+
+#[test]
+fn schema_rules_only_apply_to_known_file_names() {
+    let output = kosmetic(&["check", "--color", "never", "schema/manifest.toml"]);
+    assert!(output.status.success());
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "");
+}
+
+#[test]
+fn schema_rules_can_be_configured() {
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("schema-config");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("Cargo.toml"),
+        "[package]\nname = \"a\"\nedtion = \"2021\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join(".kosmetic.toml"),
+        "[rules]\n\"schema/cargo-unknown-key\" = \"error\"\n\"schema/cargo-publish-metadata\" = \"warn\"\n",
+    )
+    .unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_kosmetic"))
+        .args(["check", "--color", "never", "Cargo.toml"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(output.status.code(), Some(1), "{stdout}");
+    assert!(stdout.contains("error[schema/cargo-unknown-key]"));
+    assert!(stdout.contains("warning[schema/cargo-publish-metadata]"));
+}
