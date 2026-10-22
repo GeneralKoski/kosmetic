@@ -13,24 +13,47 @@
   "engines": {
     "vscode": "^1.85.0"
   },
-  "categories": ["Linters", "Formatters", "Programming Languages"],
-  "keywords": ["toml", "lint", "format", "cargo", "pyproject"],
-  "main": "./extension.js",
-  "activationEvents": ["onLanguage:toml"],
+  "categories": [
+    "Linters",
+    "Formatters",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "toml",
+    "lint",
+    "format",
+    "cargo",
+    "pyproject"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onLanguage:toml"
+  ],
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": "limited",
       "description": "The kosmetic executable is started only in trusted workspaces.",
-      "restrictedConfigurations": ["kosmetic.path"]
+      "restrictedConfigurations": [
+        "kosmetic.path"
+      ]
     }
   },
   "contributes": {
     "languages": [
       {
         "id": "toml",
-        "aliases": ["TOML", "toml"],
-        "extensions": [".toml"],
-        "filenames": ["Cargo.lock", "poetry.lock", "uv.lock"],
+        "aliases": [
+          "TOML",
+          "toml"
+        ],
+        "extensions": [
+          ".toml"
+        ],
+        "filenames": [
+          "Cargo.lock",
+          "poetry.lock",
+          "uv.lock"
+        ],
         "configuration": "./language-configuration.json"
       }
     ],
@@ -52,7 +75,11 @@
         },
         "kosmetic.trace.server": {
           "type": "string",
-          "enum": ["off", "messages", "verbose"],
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
           "default": "off",
           "description": "Traces the messages between VS Code and the language server."
         }
@@ -66,9 +93,16 @@
     ]
   },
   "scripts": {
-    "package": "npx @vscode/vsce package"
+    "build": "esbuild src/extension.js --bundle --platform=node --format=cjs --external:vscode --minify --outfile=dist/extension.js",
+    "vscode:prepublish": "npm run build",
+    "package": "vsce package",
+    "check": "node --check src/extension.js"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "@vscode/vsce": "^3.0.0"
   }
 }

@@ -1,3 +1,7 @@
-node_modules/.cache/**
-.vscode/**
-*.vsix
+**
+!dist/extension.js
+!package.json
+!README.md
+!LICENSE
+!language-configuration.json
+!syntaxes/toml.tmLanguage.json

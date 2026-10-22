@@ -9,3 +9,4 @@
 /editors/vscode/node_modules
 /editors/vscode/*.vsix
 /editors/vscode/package-lock.json
+/editors/vscode/dist

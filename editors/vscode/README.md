@@ -51,4 +51,6 @@ npm install
 npm run package   # produces kosmetic-0.1.0.vsix
 ```
 
-The extension is plain JavaScript: there is no build step.
+The source is plain JavaScript in `src/extension.js`. `npm run build` bundles
+it with its only dependency, `vscode-languageclient`, into `dist/extension.js`,
+which is what the package contains (8 files, under 100 KB).
