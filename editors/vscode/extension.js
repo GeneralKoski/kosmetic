@@ -7,8 +7,8 @@ const { LanguageClient } = require('vscode-languageclient/node');
 let client;
 
 function createClient() {
-  const config = vscode.workspace.getConfiguration('kosmetic');
-  const command = config.get('path') || 'kosmetic';
+  // Only the user-level value: a workspace must not choose what gets executed.
+  const command = vscode.workspace.getConfiguration('kosmetic').inspect('path')?.globalValue || 'kosmetic';
   return new LanguageClient(
     'kosmetic',
     'kosmetic',

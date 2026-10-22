@@ -17,6 +17,13 @@
   "keywords": ["toml", "lint", "format", "cargo", "pyproject"],
   "main": "./extension.js",
   "activationEvents": ["onLanguage:toml"],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "The kosmetic executable is started only in trusted workspaces.",
+      "restrictedConfigurations": ["kosmetic.path"]
+    }
+  },
   "contributes": {
     "languages": [
       {
@@ -41,7 +48,7 @@
           "type": "string",
           "default": "kosmetic",
           "markdownDescription": "Path of the `kosmetic` executable. The server is started as `kosmetic lsp`. Install it with `cargo install --path crates/kosmetic-cli`.",
-          "scope": "machine-overridable"
+          "scope": "machine"
         },
         "kosmetic.trace.server": {
           "type": "string",

@@ -18,7 +18,9 @@ The `kosmetic` executable must be installed. The extension starts it as
 cargo install --path crates/kosmetic-cli
 ```
 
-If it is not on your `PATH`, set `kosmetic.path`.
+If it is not on your `PATH`, set `kosmetic.path` in your user settings. The
+setting is machine-scoped: workspace settings cannot change it, so an
+untrusted repository cannot choose the program that runs.
 
 ## Settings
 
