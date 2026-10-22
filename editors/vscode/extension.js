@@ -1,5 +1,6 @@
 'use strict';
 
+const os = require('os');
 const vscode = require('vscode');
 const { LanguageClient } = require('vscode-languageclient/node');
 
@@ -12,7 +13,9 @@ function createClient() {
   return new LanguageClient(
     'kosmetic',
     'kosmetic',
-    { command, args: ['lsp'] },
+    // Not the workspace: a program planted there must not be found first.
+    // The server locates `.kosmetic.toml` from the document path, not from the cwd.
+    { command, args: ['lsp'], options: { cwd: os.homedir() } },
     {
       documentSelector: [
         { scheme: 'file', language: 'toml' },
