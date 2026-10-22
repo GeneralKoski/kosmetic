@@ -57,16 +57,14 @@ fn unknown_requests_get_an_error_and_unknown_notifications_are_ignored() {
     let mut server = started();
     let replies = server.handle(&request(2, "workspace/whatever", &json!({})));
     assert_eq!(replies[0]["error"]["code"], -32601);
-    assert!(
-        server
-            .handle(&notification("$/cancelRequest", &json!({ "id": 2 })))
-            .is_empty()
+    assert_eq!(
+        server.handle(&notification("$/cancelRequest", &json!({ "id": 2 }))),
+        Vec::<Value>::new()
     );
-    assert!(server.handle(&Value::Null).is_empty());
-    assert!(
-        server
-            .handle(&json!({ "jsonrpc": "2.0", "id": 3, "result": null }))
-            .is_empty()
+    assert_eq!(server.handle(&Value::Null), Vec::<Value>::new());
+    assert_eq!(
+        server.handle(&json!({ "jsonrpc": "2.0", "id": 3, "result": null })),
+        Vec::<Value>::new()
     );
 }
 
@@ -123,13 +121,13 @@ fn changes_republish_and_close_clears() {
             "contentChanges": [{ "text": "a = 1\n" }],
         }),
     ));
-    assert!(diagnostics(&replies).is_empty());
+    assert_eq!(diagnostics(&replies), &Vec::<Value>::new());
 
     let replies = server.handle(&notification(
         "textDocument/didClose",
         &json!({ "textDocument": { "uri": uri } }),
     ));
-    assert!(diagnostics(&replies).is_empty());
+    assert_eq!(diagnostics(&replies), &Vec::<Value>::new());
     assert!(
         server.handle(&request(
             3,
@@ -173,7 +171,7 @@ fn schema_rules_follow_the_file_name() {
         "file:///tmp/none/other.toml",
         "[package]\nname = \"a\"\nedtion = \"2021\"\n",
     );
-    assert!(diagnostics(&replies).is_empty());
+    assert_eq!(diagnostics(&replies), &Vec::<Value>::new());
 }
 
 #[test]
@@ -279,9 +277,15 @@ fn fix_all_rewrites_the_document() {
     );
 
     open(&mut server, uri, "a = 1\n");
-    assert!(code_actions(&mut server, uri, &nowhere, None).is_empty());
+    assert_eq!(
+        code_actions(&mut server, uri, &nowhere, None),
+        Vec::<Value>::new()
+    );
     open(&mut server, uri, "a = \n");
-    assert!(code_actions(&mut server, uri, &nowhere, None).is_empty());
+    assert_eq!(
+        code_actions(&mut server, uri, &nowhere, None),
+        Vec::<Value>::new()
+    );
 }
 
 #[test]
