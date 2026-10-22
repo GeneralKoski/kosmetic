@@ -403,3 +403,22 @@ fn an_unreadable_directory_fails_the_run() {
     let output = kosmetic(&["check", "does-not-exist-dir/"]);
     assert_eq!(output.status.code(), Some(2));
 }
+
+#[test]
+fn fmt_diff_shows_the_changes_and_does_not_write() {
+    let source = "a=1\nb = 2\n";
+    let path = temp_file("fmt-diff", source);
+    let output = kosmetic(&["fmt", "--diff", path.to_str().unwrap()]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        stdout.contains("@@ -1,2 +1,2 @@\n-a=1\n+a = 1\n b = 2\n"),
+        "{stdout}"
+    );
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), source);
+
+    let clean = temp_file("fmt-diff-clean", "a = 1\n");
+    let output = kosmetic(&["fmt", "--diff", clean.to_str().unwrap()]);
+    assert!(output.status.success());
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "");
+}

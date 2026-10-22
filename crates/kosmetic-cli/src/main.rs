@@ -3,6 +3,8 @@
 //! Exit codes: 0 no errors, 1 at least one error-level diagnostic,
 //! 2 the run itself failed (unreadable file, bad arguments).
 
+mod diff;
+
 use std::io::{IsTerminal, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -50,6 +52,9 @@ enum Command {
         /// with code 1 if there are any.
         #[arg(long)]
         check: bool,
+        /// Like `--check`, but print what would change as a unified diff.
+        #[arg(long)]
+        diff: bool,
     },
     /// Run the language server, speaking LSP over standard input and output.
     Lsp,
@@ -98,8 +103,8 @@ fn main() -> ExitCode {
                 Err(code) => code,
             }
         }
-        Command::Fmt { paths, check } => match expand(&paths) {
-            Ok(paths) => fmt(&paths, check),
+        Command::Fmt { paths, check, diff } => match expand(&paths) {
+            Ok(paths) => fmt(&paths, check || diff, diff),
             Err(code) => code,
         },
         Command::Lsp => lsp(),
@@ -273,7 +278,7 @@ fn check(paths: &[PathBuf], config: &Config, format: Format, color: bool, fix: b
 
 /// Formats every file. Exit codes: 0 all good, 1 with `--check` some file
 /// would change, 2 a file could not be read, written or formatted.
-fn fmt(paths: &[PathBuf], check: bool) -> ExitCode {
+fn fmt(paths: &[PathBuf], check: bool, diff: bool) -> ExitCode {
     let mut changed = 0;
     let mut failed = false;
     for path in paths {
@@ -314,7 +319,9 @@ fn fmt(paths: &[PathBuf], check: bool) -> ExitCode {
         };
         if formatted != source {
             changed += 1;
-            if check {
+            if diff {
+                print!("{}", diff::unified(&name, &source, &formatted));
+            } else if check {
                 eprintln!("kosmetic: would reformat {name}");
             }
         }
