@@ -23,7 +23,7 @@ struct Cli {
 enum Command {
     /// Lint one or more TOML files.
     Check {
-        /// Files to lint.
+        /// Files to lint. A directory stands for the `.toml` files below it.
         #[arg(required = true)]
         paths: Vec<PathBuf>,
         /// Output format.
@@ -42,8 +42,8 @@ enum Command {
     },
     /// Format TOML files in place.
     Fmt {
-        /// Files to format. `-` reads standard input and writes the result to
-        /// standard output.
+        /// Files to format. A directory stands for the `.toml` files below it.
+        /// `-` reads standard input and writes the result to standard output.
         #[arg(required = true)]
         paths: Vec<PathBuf>,
         /// Do not write anything: list the files that would change and exit
@@ -91,11 +91,17 @@ fn main() -> ExitCode {
         } => {
             let color = color.enabled();
             match load_config(config, format, color) {
-                Ok(config) => check(&paths, &config, format, color, fix),
+                Ok(config) => match expand(&paths) {
+                    Ok(paths) => check(&paths, &config, format, color, fix),
+                    Err(code) => code,
+                },
                 Err(code) => code,
             }
         }
-        Command::Fmt { paths, check } => fmt(&paths, check),
+        Command::Fmt { paths, check } => match expand(&paths) {
+            Ok(paths) => fmt(&paths, check),
+            Err(code) => code,
+        },
         Command::Lsp => lsp(),
         Command::Rules => {
             for rule in all_rules() {
@@ -148,6 +154,49 @@ fn print_diagnostics(
         Format::Human => print!("{}", render_human(name, source, diagnostics, color)),
         Format::Json => println!("{}", render_json(name, source, diagnostics)),
     }
+}
+
+/// Directories that hold dependencies or build output, not the user's files.
+const SKIPPED_DIRECTORIES: &[&str] = &["target", "node_modules", "vendor"];
+
+/// Replaces every directory with the `.toml` files below it, in a stable
+/// order. Directories whose name starts with `.` and the ones in
+/// [`SKIPPED_DIRECTORIES`] are not entered. Files named on the command line
+/// are kept whatever their extension, and so is `-` (standard input).
+fn expand(paths: &[PathBuf]) -> Result<Vec<PathBuf>, ExitCode> {
+    fn walk(dir: &Path, found: &mut Vec<PathBuf>) -> std::io::Result<()> {
+        let mut entries = std::fs::read_dir(dir)?
+            .map(|entry| entry.map(|entry| entry.path()))
+            .collect::<Result<Vec<_>, _>>()?;
+        entries.sort();
+        for path in entries {
+            let name = path
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            if path.is_dir() {
+                if !name.starts_with('.') && !SKIPPED_DIRECTORIES.contains(&name.as_str()) {
+                    walk(&path, found)?;
+                }
+            } else if path.extension().is_some_and(|ext| ext == "toml") {
+                found.push(path);
+            }
+        }
+        Ok(())
+    }
+
+    let mut files = Vec::new();
+    for path in paths {
+        if path.is_dir() {
+            if let Err(err) = walk(path, &mut files) {
+                eprintln!("kosmetic: cannot read {}: {err}", path.display());
+                return Err(ExitCode::from(2));
+            }
+        } else {
+            files.push(path.clone());
+        }
+    }
+    Ok(files)
 }
 
 /// Writes the fixes of `path` back to it and returns the new source.

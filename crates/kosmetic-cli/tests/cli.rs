@@ -321,3 +321,85 @@ fn lsp_serves_a_session_over_stdio() {
     send(&mut stdin, r#"{"jsonrpc":"2.0","method":"exit"}"#);
     assert!(child.wait().unwrap().success());
 }
+
+/// A directory tree with `.toml` files at several levels.
+fn tree(name: &str) -> std::path::PathBuf {
+    let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join(name);
+    let _ = std::fs::remove_dir_all(&root);
+    for (path, content) in [
+        ("b.toml", "b=1\n"),
+        ("a.toml", "a = 1\n"),
+        ("sub/c.toml", "c=3\n"),
+        ("sub/notes.txt", "not toml\n"),
+        (".hidden/d.toml", "d=4\n"),
+        ("target/e.toml", "e=5\n"),
+        ("node_modules/f.toml", "f=6\n"),
+    ] {
+        let path = root.join(path);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, content).unwrap();
+    }
+    root
+}
+
+#[test]
+fn check_walks_directories() {
+    let root = tree("walk-check");
+    let output = kosmetic(&["check", "--color", "never", root.to_str().unwrap()]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{stdout}");
+    let files: Vec<_> = stdout
+        .lines()
+        .filter(|line| line.contains("warning["))
+        .map(|line| {
+            line.split(':')
+                .next()
+                .unwrap()
+                .trim_start_matches(root.to_str().unwrap())
+        })
+        .collect();
+    // Sorted, skipping the hidden, target and node_modules directories, and the .txt file.
+    assert_eq!(files, ["/b.toml", "/sub/c.toml"]);
+}
+
+#[test]
+fn fmt_walks_directories() {
+    let root = tree("walk-fmt");
+    let output = kosmetic(&["fmt", root.to_str().unwrap()]);
+    assert!(output.status.success());
+    assert_eq!(
+        std::fs::read_to_string(root.join("b.toml")).unwrap(),
+        "b = 1\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.join("sub/c.toml")).unwrap(),
+        "c = 3\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.join(".hidden/d.toml")).unwrap(),
+        "d=4\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.join("target/e.toml")).unwrap(),
+        "e=5\n"
+    );
+}
+
+#[test]
+fn files_named_explicitly_are_kept_whatever_the_extension() {
+    let root = tree("walk-explicit");
+    let output = kosmetic(&[
+        "check",
+        "--color",
+        "never",
+        root.join("sub/notes.txt").to_str().unwrap(),
+    ]);
+    // "not toml" is not valid TOML: the file was read, not skipped.
+    assert_eq!(output.status.code(), Some(1));
+}
+
+#[test]
+fn an_unreadable_directory_fails_the_run() {
+    let output = kosmetic(&["check", "does-not-exist-dir/"]);
+    assert_eq!(output.status.code(), Some(2));
+}

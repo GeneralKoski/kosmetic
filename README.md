@@ -24,7 +24,9 @@ Cargo.toml:2:18: warning[style/no-trailing-whitespace]: trailing whitespace
   exact positions and fixes edit the file without reformatting it.
 - **Error recovery.** One typo does not hide every other error in the file.
 - **Proven correct.** Validated against the official
-  [`toml-test`](https://github.com/toml-lang/toml-test) suite and fuzzed.
+  [`toml-test`](https://github.com/toml-lang/toml-test) suite, and
+  property-tested: on random strings, random bytes and TOML-like input the tree
+  stays lossless and the parser never panics.
 
 ## Usage
 
@@ -32,6 +34,7 @@ Cargo.toml:2:18: warning[style/no-trailing-whitespace]: trailing whitespace
 cargo install --path crates/kosmetic-cli
 
 kosmetic check Cargo.toml pyproject.toml
+kosmetic check .                           # every .toml file below the directory
 kosmetic check --format json config.toml   # for CI and editors
 kosmetic check --color never Cargo.toml    # auto (default), always, never
 kosmetic check --fix Cargo.toml            # apply the automatic fixes
@@ -41,6 +44,10 @@ kosmetic fmt - < Cargo.toml                # stdin to stdout, for editors
 kosmetic lsp                               # language server on stdin/stdout
 kosmetic rules                             # list available rules
 ```
+
+A directory stands for the `.toml` files below it, in alphabetical order.
+Directories starting with `.`, `target`, `node_modules` and `vendor` are not
+entered. A file named on the command line is always checked.
 
 Exit codes: `0` no errors, `1` at least one error (`fmt --check`: a file
 would change), `2` the run failed (unreadable file, bad arguments, invalid
