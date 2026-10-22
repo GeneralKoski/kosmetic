@@ -139,3 +139,69 @@ fn fix_does_not_touch_files_with_errors() {
     assert!(String::from_utf8_lossy(&output.stderr).contains("has errors, not fixing"));
     assert_eq!(std::fs::read_to_string(&path).unwrap(), source);
 }
+
+#[test]
+fn fmt_rewrites_the_file() {
+    let path = temp_file("fmt-rewrites", "a=[1,2]\n\n\n[ t ]\nb = {c=1}");
+    let output = kosmetic(&["fmt", path.to_str().unwrap()]);
+    assert!(output.status.success());
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        "a = [1, 2]\n\n[t]\nb = { c = 1 }\n"
+    );
+}
+
+#[test]
+fn fmt_check_does_not_write() {
+    let source = "a=1\n";
+    let path = temp_file("fmt-check", source);
+    let output = kosmetic(&["fmt", "--check", path.to_str().unwrap()]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("would reformat"));
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), source);
+
+    let formatted = temp_file("fmt-check-clean", "a = 1\n");
+    let output = kosmetic(&["fmt", "--check", formatted.to_str().unwrap()]);
+    assert!(output.status.success());
+}
+
+#[test]
+fn fmt_refuses_files_with_errors() {
+    let source = "a = \n";
+    let path = temp_file("fmt-invalid", source);
+    let output = kosmetic(&["fmt", path.to_str().unwrap()]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("has errors, not formatting"));
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), source);
+}
+
+#[test]
+fn fmt_reads_standard_input() {
+    use std::io::Write;
+    use std::process::Stdio;
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_kosmetic"))
+        .args(["fmt", "-"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child.stdin.take().unwrap().write_all(b"a=1").unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert!(output.status.success());
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "a = 1\n");
+}
+
+#[test]
+fn formatted_output_passes_check() {
+    let path = temp_file("fmt-then-check", "#x\na=[\n1,\n 2\n]\n[ t ]\n\"k\"=1  ");
+    assert!(kosmetic(&["fmt", path.to_str().unwrap()]).status.success());
+    let output = kosmetic(&["check", "--color", "never", path.to_str().unwrap()]);
+    assert!(output.status.success());
+    // The formatter does not touch comment text, `check` still asks for the space.
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!stdout.contains("no-trailing-whitespace"));
+    assert!(!stdout.contains("no-multiple-blank-lines"));
+    assert!(!stdout.contains("spaces-around-equals"));
+    assert!(!stdout.contains("final-newline"));
+}

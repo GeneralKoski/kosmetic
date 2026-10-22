@@ -14,6 +14,7 @@ repository = "https://github.com/GeneralKoski/kosmetic"
 kosmetic-diagnostics = { path = "crates/kosmetic-diagnostics" }
 kosmetic-syntax = { path = "crates/kosmetic-syntax" }
 kosmetic-rules = { path = "crates/kosmetic-rules" }
+kosmetic-format = { path = "crates/kosmetic-format" }
 
 clap = { version = "4.6", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }

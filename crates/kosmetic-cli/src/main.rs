@@ -3,12 +3,13 @@
 //! Exit codes: 0 no errors, 1 at least one error-level diagnostic,
 //! 2 the run itself failed (unreadable file, bad arguments).
 
-use std::io::IsTerminal;
+use std::io::{IsTerminal, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand, ValueEnum};
 use kosmetic_diagnostics::{Diagnostic, Severity, render_human, render_json};
+use kosmetic_format::FormatError;
 use kosmetic_rules::{Config, FixError, all_rules, fix_source};
 
 #[derive(Parser)]
@@ -38,6 +39,17 @@ enum Command {
         /// Apply the automatic fixes to the files, then report what is left.
         #[arg(long)]
         fix: bool,
+    },
+    /// Format TOML files in place.
+    Fmt {
+        /// Files to format. `-` reads standard input and writes the result to
+        /// standard output.
+        #[arg(required = true)]
+        paths: Vec<PathBuf>,
+        /// Do not write anything: list the files that would change and exit
+        /// with code 1 if there are any.
+        #[arg(long)]
+        check: bool,
     },
     /// List every available rule.
     Rules,
@@ -81,6 +93,7 @@ fn main() -> ExitCode {
                 Err(code) => code,
             }
         }
+        Command::Fmt { paths, check } => fmt(&paths, check),
         Command::Rules => {
             for rule in all_rules() {
                 let meta = rule.meta();
@@ -204,6 +217,73 @@ fn check(paths: &[PathBuf], config: &Config, format: Format, color: bool, fix: b
     }
 
     if has_errors {
+        ExitCode::from(1)
+    } else {
+        ExitCode::SUCCESS
+    }
+}
+
+/// Formats every file. Exit codes: 0 all good, 1 with `--check` some file
+/// would change, 2 a file could not be read, written or formatted.
+fn fmt(paths: &[PathBuf], check: bool) -> ExitCode {
+    let mut changed = 0;
+    let mut failed = false;
+    for path in paths {
+        let stdin = path.as_os_str() == "-";
+        let name = if stdin {
+            "<stdin>".to_owned()
+        } else {
+            path.display().to_string()
+        };
+        let source = if stdin {
+            let mut source = String::new();
+            std::io::stdin().read_to_string(&mut source).map(|_| source)
+        } else {
+            std::fs::read_to_string(path)
+        };
+        let source = match source {
+            Ok(source) => source,
+            Err(err) => {
+                eprintln!("kosmetic: cannot read {name}: {err}");
+                failed = true;
+                continue;
+            }
+        };
+        let formatted = match kosmetic_format::format(&source) {
+            Ok(formatted) => formatted,
+            Err(FormatError::Invalid) => {
+                eprintln!("kosmetic: {name} has errors, not formatting it");
+                failed = true;
+                continue;
+            }
+            Err(FormatError::ChangesMeaning) => {
+                eprintln!(
+                    "kosmetic: formatting would change the meaning of {name}, left untouched (this is a bug)"
+                );
+                failed = true;
+                continue;
+            }
+        };
+        if formatted != source {
+            changed += 1;
+            if check {
+                eprintln!("kosmetic: would reformat {name}");
+            }
+        }
+        if stdin {
+            if !check {
+                let _ = std::io::stdout().write_all(formatted.as_bytes());
+            }
+        } else if !check && formatted != source {
+            if let Err(err) = std::fs::write(path, formatted) {
+                eprintln!("kosmetic: cannot write {name}: {err}");
+                failed = true;
+            }
+        }
+    }
+    if failed {
+        ExitCode::from(2)
+    } else if check && changed > 0 {
         ExitCode::from(1)
     } else {
         ExitCode::SUCCESS

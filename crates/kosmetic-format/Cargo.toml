@@ -1,0 +1,16 @@
+[package]
+name = "kosmetic-format"
+description = "TOML formatter built on the lossless tree of kosmetic"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+kosmetic-diagnostics.workspace = true
+kosmetic-syntax.workspace = true
+
+[lints]
+workspace = true
